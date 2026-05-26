@@ -140,6 +140,97 @@ func TestAdminChannelsAndKeys(t *testing.T) {
 	}
 }
 
+func TestAdminChatCompletionUsesSelectedChannelAndModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var gotAuth string
+	var gotModel string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		gotAuth = r.Header.Get("Authorization")
+		var payload struct {
+			Model    string `json:"model"`
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode upstream request: %v", err)
+		}
+		gotModel = payload.Model
+		if len(payload.Messages) != 1 || payload.Messages[0].Content != "hi" {
+			t.Fatalf("messages = %+v", payload.Messages)
+		}
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-test","choices":[{"message":{"role":"assistant","content":"hello"}}],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}`))
+	}))
+	defer upstream.Close()
+
+	manager := readyConfigManager(t)
+	if err := manager.Save(func(cfg *config.Config) error {
+		cfg.OpenAIAPI = []config.OpenAIAPIChannel{{
+			Name:          "deepseek",
+			BaseURL:       upstream.URL,
+			APIKeyEntries: []config.APIKeyEntry{{APIKey: "sk-upstream-test"}},
+			Models:        []config.ModelEntry{{Name: "deepseek-chat", Alias: "gpt-5.4"}},
+		}}
+		return nil
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	sessions := auth.NewSessionManagerWithSecret([]byte("01234567890123456789012345678901"))
+	handler := NewHandler(manager, sessions)
+
+	r := gin.New()
+	handler.Register(r.Group("/api/admin"))
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/chat/completions", bytes.NewBufferString(`{"channelType":"openai-api","channelName":"deepseek","model":"gpt-5.4","messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("content-type", "application/json")
+	req.AddCookie(sessionCookie(t, sessions))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("chat status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if gotAuth != "Bearer sk-upstream-test" {
+		t.Fatalf("Authorization = %q", gotAuth)
+	}
+	if gotModel != "deepseek-chat" {
+		t.Fatalf("model = %q, want deepseek-chat", gotModel)
+	}
+	var payload struct {
+		Content     string `json:"content"`
+		TotalTokens int64  `json:"totalTokens"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode chat response: %v", err)
+	}
+	if payload.Content != "hello" || payload.TotalTokens != 5 {
+		t.Fatalf("chat response = %+v", payload)
+	}
+}
+
+func TestAdminChatCompletionRejectsInvalidMessageRole(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	manager := readyConfigManager(t)
+	sessions := auth.NewSessionManagerWithSecret([]byte("01234567890123456789012345678901"))
+	handler := NewHandler(manager, sessions)
+
+	r := gin.New()
+	handler.Register(r.Group("/api/admin"))
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/chat/completions", bytes.NewBufferString(`{"channelType":"openai-api","channelName":"deepseek","model":"gpt-5.4","messages":[{"role":"tool","content":"hi"}]}`))
+	req.Header.Set("content-type", "application/json")
+	req.AddCookie(sessionCookie(t, sessions))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("chat status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAdminLogsAndStats(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager := readyConfigManager(t)

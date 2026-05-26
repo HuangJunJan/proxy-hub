@@ -1,8 +1,11 @@
 package admin
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -56,6 +59,7 @@ func (h *Handler) Register(r gin.IRouter) {
 	protected.PUT("/channels/:type/:name", h.updateChannel)
 	protected.DELETE("/channels/:type/:name", h.deleteChannel)
 	protected.POST("/channels/:type/:name/health", h.healthCheck)
+	protected.POST("/chat/completions", h.chatCompletion)
 	protected.GET("/keys", h.listKeys)
 	protected.POST("/keys", h.createKey)
 	protected.PATCH("/keys/:id", h.updateKey)
@@ -345,6 +349,108 @@ func (h *Handler) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "latencyMs": latency})
 }
 
+type chatCompletionRequest struct {
+	ChannelType string        `json:"channelType"`
+	ChannelName string        `json:"channelName"`
+	Model       string        `json:"model"`
+	Messages    []chatMessage `json:"messages"`
+}
+
+type chatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type chatCompletionResponse struct {
+	Content          string `json:"content"`
+	Raw              any    `json:"raw,omitempty"`
+	PromptTokens     *int64 `json:"promptTokens,omitempty"`
+	CompletionTokens *int64 `json:"completionTokens,omitempty"`
+	TotalTokens      *int64 `json:"totalTokens,omitempty"`
+}
+
+func (h *Handler) chatCompletion(c *gin.Context) {
+	var req chatCompletionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if strings.TrimSpace(req.ChannelType) != config.ChannelTypeOpenAIAPI {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "chat is only implemented for openai-api channels"})
+		return
+	}
+	req.ChannelName = strings.TrimSpace(req.ChannelName)
+	req.Model = strings.TrimSpace(req.Model)
+	if req.ChannelName == "" || req.Model == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "channelName, model, and messages are required"})
+		return
+	}
+	messages, ok := validateChatMessages(req.Messages)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "channelName, model, and messages are required"})
+		return
+	}
+	req.Messages = messages
+
+	cfg := h.config.Snapshot()
+	idx := openAIChannelIndex(cfg.OpenAIAPI, req.ChannelName)
+	if idx < 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
+		return
+	}
+	ch := cfg.OpenAIAPI[idx]
+	if ch.Disabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "channel is disabled"})
+		return
+	}
+	upstreamModel, ok := resolveChannelModel(ch.Models, req.Model)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "model not found in selected channel"})
+		return
+	}
+	apiKey, ok := firstAPIKey(ch.APIKeyEntries)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "channel has no api key entries"})
+		return
+	}
+	body, err := json.Marshal(gin.H{
+		"messages": req.Messages,
+		"model":    req.Model,
+		"stream":   false,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode chat request"})
+		return
+	}
+	resp, err := h.probe.Chat(c.Request.Context(), upstream.ChatRequest{
+		BaseURL:           ch.BaseURL,
+		APIKey:            apiKey,
+		UpstreamModelName: upstreamModel,
+		OriginalBody:      body,
+		Timeout:           time.Duration(ch.EffectiveTimeoutSec()) * time.Second,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to read upstream response"})
+		return
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		c.JSON(http.StatusBadGateway, gin.H{"error": strings.TrimSpace(string(responseBody))})
+		return
+	}
+	parsed, err := parseChatCompletionResponse(responseBody)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, parsed)
+}
+
 func (h *Handler) listKeys(c *gin.Context) {
 	cfg := h.config.Snapshot()
 	keys := make([]gin.H, 0, len(cfg.APIKeys))
@@ -572,6 +678,79 @@ func oauthChannelsOrEmpty(channels []config.ChatGPTOAuthChannel) []config.ChatGP
 		return []config.ChatGPTOAuthChannel{}
 	}
 	return channels
+}
+
+func resolveChannelModel(models []config.ModelEntry, requested string) (string, bool) {
+	requested = strings.TrimSpace(requested)
+	for _, model := range models {
+		if strings.EqualFold(model.EffectiveAlias(), requested) {
+			name := strings.TrimSpace(model.Name)
+			return name, name != ""
+		}
+	}
+	return "", false
+}
+
+func validateChatMessages(messages []chatMessage) ([]chatMessage, bool) {
+	if len(messages) == 0 {
+		return nil, false
+	}
+	out := make([]chatMessage, 0, len(messages))
+	for _, message := range messages {
+		role := strings.TrimSpace(message.Role)
+		if role != "assistant" && role != "system" && role != "user" {
+			return nil, false
+		}
+		if strings.TrimSpace(message.Content) == "" {
+			return nil, false
+		}
+		out = append(out, chatMessage{Role: role, Content: message.Content})
+	}
+	return out, true
+}
+
+func firstAPIKey(entries []config.APIKeyEntry) (string, bool) {
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.APIKey) != "" {
+			return entry.APIKey, true
+		}
+	}
+	return "", false
+}
+
+func parseChatCompletionResponse(body []byte) (chatCompletionResponse, error) {
+	var payload struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     *int64 `json:"prompt_tokens"`
+			CompletionTokens *int64 `json:"completion_tokens"`
+			TotalTokens      *int64 `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return chatCompletionResponse{}, errors.New("decode upstream chat response")
+	}
+	content := ""
+	if len(payload.Choices) > 0 {
+		content = payload.Choices[0].Message.Content
+	}
+	var raw any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		raw = nil
+	}
+	return chatCompletionResponse{
+		Content:          content,
+		Raw:              raw,
+		PromptTokens:     payload.Usage.PromptTokens,
+		CompletionTokens: payload.Usage.CompletionTokens,
+		TotalTokens:      payload.Usage.TotalTokens,
+	}, nil
 }
 
 func oauthChannelIndex(channels []config.ChatGPTOAuthChannel, name string) int {

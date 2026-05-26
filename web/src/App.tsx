@@ -8,6 +8,7 @@ import { translate } from "./lib/i18n";
 import { applyTheme } from "./lib/theme";
 import type { Language, ThemeMode } from "./lib/types";
 import { usePersistentState } from "./lib/use-persistent-state";
+import { ChatPage } from "./pages/chat-page";
 import { ChannelsPage } from "./pages/channels-page";
 import { DashboardPage } from "./pages/dashboard-page";
 import { KeysPage } from "./pages/keys-page";
@@ -108,6 +109,7 @@ export function App() {
             <Route element={<Navigate replace to="/dashboard" />} index />
             <Route element={<DashboardPage />} path="dashboard" />
             <Route element={<ChannelsPage />} path="channels" />
+            <Route element={<ChatPage />} path="chat" />
             <Route element={<KeysPage />} path="keys" />
             <Route element={<LogsPage />} path="logs" />
             <Route element={<LivePage />} path="live" />

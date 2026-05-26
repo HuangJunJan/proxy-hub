@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, KeyRound, Radio, Route, ScrollText, Settings } from "lucide-react";
+import { BarChart3, KeyRound, MessageSquare, Radio, Route, ScrollText, Settings } from "lucide-react";
 
 export interface ConsoleRoute {
   icon: LucideIcon;
@@ -10,6 +10,7 @@ export interface ConsoleRoute {
 export const consoleRoutes: ConsoleRoute[] = [
   { icon: BarChart3, labelKey: "dashboard", path: "/dashboard" },
   { icon: Route, labelKey: "channels", path: "/channels" },
+  { icon: MessageSquare, labelKey: "chat", path: "/chat" },
   { icon: KeyRound, labelKey: "keys", path: "/keys" },
   { icon: ScrollText, labelKey: "logs", path: "/logs" },
   { icon: Radio, labelKey: "live", path: "/live" },

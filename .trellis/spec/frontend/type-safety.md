@@ -62,6 +62,61 @@ const channel: OpenAIChannel = {
 
 Shared cross-page response types also belong in `web/src/lib/types.ts`; page-local UI state can stay local.
 
+### Scenario: Admin Console Online Chat DTOs
+
+#### 1. Scope / Trigger
+- Trigger: authenticated console pages call an admin API that directly tests a selected upstream channel and model.
+
+#### 2. Signatures
+- `POST /api/admin/chat/completions`
+- `AdminChatRequest`
+- `AdminChatResponse`
+- `ChatMessage`
+
+#### 3. Contracts
+- Request shape is `{ channelType: "openai-api", channelName: string, model: string, messages: ChatMessage[] }`.
+- `model` is the channel-visible alias or name shown in the console; the backend resolves it against the selected channel's `models[]` before calling upstream.
+- `messages[]` contains `{ role: "system" | "user" | "assistant", content: string }`.
+- Response shape is `{ content: string, promptTokens?: number, completionTokens?: number, totalTokens?: number, raw?: unknown }`.
+- This endpoint uses admin session cookie auth, not downstream Bearer API keys.
+- This endpoint is for selected-channel testing and currently supports only `openai-api`; it must not expose upstream API keys to the browser.
+
+#### 4. Validation & Error Matrix
+- Missing session -> HTTP 401 `{ error: "login required" }`.
+- Unsupported `channelType` -> HTTP 501 `{ error }`.
+- Missing `channelName`, `model`, or `messages` -> HTTP 400 `{ error }`.
+- Channel not found or model not found in selected channel -> HTTP 404 `{ error }`.
+- Upstream non-2xx or read/decode failure -> HTTP 502 `{ error }`.
+
+#### 5. Good/Base/Bad Cases
+- Good: chat page builds channel/model options from `api.channels()` and sends `AdminChatRequest` through `api.chatCompletion`.
+- Base: page-local chat history can stay in component state because it is not persisted configuration.
+- Bad: browser calls an upstream provider directly with `api-key-entries[].api-key`.
+
+#### 6. Tests Required
+- Backend admin httptest must assert selected alias routes to the selected channel's real upstream model.
+- `pnpm build` must type-check `AdminChatRequest` / `AdminChatResponse`.
+- `go test ./...` must pass after endpoint changes.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```ts
+fetch(channel["base-url"], { headers: { Authorization: channel["api-key-entries"][0]["api-key"] } });
+```
+
+Correct:
+
+```ts
+await api.chatCompletion({
+  channelName,
+  channelType: "openai-api",
+  model,
+  messages,
+});
+```
+
 ---
 
 ## Validation

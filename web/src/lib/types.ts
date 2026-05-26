@@ -100,3 +100,25 @@ export interface SeriesPoint {
   ts: number;
   value: number;
 }
+
+export type ChatRole = "assistant" | "system" | "user";
+
+export interface ChatMessage {
+  role: ChatRole;
+  content: string;
+}
+
+export interface AdminChatRequest {
+  channelType: "openai-api";
+  channelName: string;
+  model: string;
+  messages: ChatMessage[];
+}
+
+export interface AdminChatResponse {
+  content: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  raw?: unknown;
+}

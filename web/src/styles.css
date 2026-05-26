@@ -327,6 +327,117 @@ nav {
   align-items: start;
 }
 
+.chat-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-height: calc(100vh - 112px);
+}
+
+.chat-controls {
+  min-width: 0;
+}
+
+.chat-panel {
+  min-width: 0;
+}
+
+.chat-card .ui-card-content {
+  display: grid;
+  grid-template-rows: minmax(360px, calc(100vh - 276px)) auto;
+  gap: 14px;
+}
+
+.chat-thread {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.chat-empty {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chat-message {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  width: min(720px, 100%);
+}
+
+.chat-message.user {
+  justify-self: end;
+  grid-template-columns: minmax(0, 1fr) 28px;
+}
+
+.chat-message.user .chat-avatar {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.chat-message.user p {
+  grid-column: 1;
+  grid-row: 1;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+.chat-avatar {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--accent);
+}
+
+.chat-message p {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.chat-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.chat-compose .ui-textarea {
+  min-height: 96px;
+  max-height: 220px;
+}
+
+.chat-meta {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chat-meta span {
+  overflow-wrap: anywhere;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -948,7 +1059,16 @@ nav {
   .status-grid,
   .live-summary,
   .split-view,
+  .chat-layout,
   .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-card .ui-card-content {
+    grid-template-rows: minmax(320px, 52vh) auto;
+  }
+
+  .chat-compose {
     grid-template-columns: 1fr;
   }
 

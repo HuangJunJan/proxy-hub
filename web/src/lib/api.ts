@@ -1,5 +1,7 @@
 import axios from "axios";
 import type {
+  AdminChatRequest,
+  AdminChatResponse,
   ChannelSummary,
   ChannelHealthResult,
   ChannelsResponse,
@@ -93,6 +95,11 @@ export const api = {
     requestArray<SeriesPoint>(
       `/api/admin/stats/series?channel=${encodeURIComponent(channel)}&metric=${metric}&window=${window}`,
     ),
+  chatCompletion: (payload: AdminChatRequest) =>
+    request<AdminChatResponse>("/api/admin/chat/completions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
 
 export function getErrorMessage(error: unknown) {
