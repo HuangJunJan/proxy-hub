@@ -71,3 +71,36 @@ Added an authenticated console chat section for selecting an openai-api channel/
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Proxy Responses API
+
+**Date**: 2026-05-26
+**Task**: Proxy Responses API
+**Branch**: `main`
+
+### Summary
+
+Added transparent OpenAI Responses API proxying for /v1/responses and root /responses, including upstream adapter support, alias routing, token usage parsing, tests, and backend spec updates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `57bdefd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
