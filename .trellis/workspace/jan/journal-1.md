@@ -38,3 +38,36 @@ Added root OpenAI-compatible /chat/completions and /models route aliases for BYO
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Add admin online chat console
+
+**Date**: 2026-05-26
+**Task**: Add admin online chat console
+**Branch**: `main`
+
+### Summary
+
+Added an authenticated console chat section for selecting an openai-api channel/model and testing non-streaming chat completions without exposing upstream keys to the browser.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ed385bb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
