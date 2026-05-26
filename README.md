@@ -32,7 +32,7 @@ curl http://localhost:8787/healthz
 .\scripts\dev.ps1
 ```
 
-默认访问 `http://localhost:5173`，后端监听 `http://localhost:8787`，开发配置写入系统临时目录下的 `proxy-hub-dev\config.yaml`。
+默认访问 `http://localhost:7878`，后端监听 `http://localhost:8787`，开发配置写入系统临时目录下的 `proxy-hub-dev\config.yaml`。
 
 常用参数：
 

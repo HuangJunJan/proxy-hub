@@ -2,7 +2,7 @@ param(
   [string]$ConfigDir = (Join-Path $env:TEMP "proxy-hub-dev"),
   [string]$HostName = "localhost",
   [int]$BackendPort = 8787,
-  [int]$FrontendPort = 5173,
+  [int]$FrontendPort = 7878,
   [switch]$SkipInstall
 )
 
