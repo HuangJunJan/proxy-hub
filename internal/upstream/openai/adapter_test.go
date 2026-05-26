@@ -86,6 +86,89 @@ func TestChatStreamAcceptHeader(t *testing.T) {
 	}
 }
 
+func TestResponsesReplacesModelAndSetsAuth(t *testing.T) {
+	var gotModel string
+	var gotInput string
+	var gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		gotAuth = r.Header.Get("Authorization")
+		var payload struct {
+			Model string `json:"model"`
+			Input string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		gotModel = payload.Model
+		gotInput = payload.Input
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-test","object":"response","output":[]}`))
+	}))
+	defer server.Close()
+
+	adapter := New(server.Client())
+	resp, err := adapter.Responses(context.Background(), upstream.ResponsesRequest{
+		BaseURL:           server.URL,
+		APIKey:            "sk-test",
+		UpstreamModelName: "deepseek-chat",
+		OriginalBody:      []byte(`{"model":"gpt-5.4","input":"hi"}`),
+		Timeout:           time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Responses() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if gotAuth != "Bearer sk-test" {
+		t.Fatalf("Authorization = %q", gotAuth)
+	}
+	if gotModel != "deepseek-chat" {
+		t.Fatalf("model = %q, want deepseek-chat", gotModel)
+	}
+	if gotInput != "hi" {
+		t.Fatalf("input = %q, want hi", gotInput)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}
+
+func TestResponsesStreamAcceptHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Accept") != "text/event-stream" {
+			t.Fatalf("Accept = %q", r.Header.Get("Accept"))
+		}
+		w.Header().Set("content-type", "text/event-stream")
+		_, _ = w.Write([]byte("event: response.created\ndata: {}\n\n"))
+	}))
+	defer server.Close()
+
+	adapter := New(server.Client())
+	resp, err := adapter.Responses(context.Background(), upstream.ResponsesRequest{
+		BaseURL:           server.URL,
+		APIKey:            "sk-test",
+		UpstreamModelName: "gpt-4o",
+		OriginalBody:      []byte(`{"model":"gpt-4o","input":"hi","stream":true}`),
+		Stream:            true,
+	})
+	if err != nil {
+		t.Fatalf("Responses() error = %v", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if string(data) != "event: response.created\ndata: {}\n\n" {
+		t.Fatalf("body = %q", string(data))
+	}
+}
+
 func TestCopyHeadersSkipsHopByHopOrEncodingHeaders(t *testing.T) {
 	dst := http.Header{}
 	copyHeaders(dst, http.Header{

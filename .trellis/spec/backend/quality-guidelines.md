@@ -172,29 +172,34 @@ auth.AbortOpenAIError(c, http.StatusUnauthorized, "Invalid API key provided.", "
 #### 2. Signatures
 - `GET /v1/models`
 - `POST /v1/chat/completions`
+- `POST /v1/responses`
 - `GET /models`
 - `POST /chat/completions`
+- `POST /responses`
 
 #### 3. Contracts
 - `/v1/*` remains the documented OpenAI base URL contract.
-- Root routes exist as BYOK compatibility aliases for clients that treat the configured base URL as the origin and append `/chat/completions` or `/models`.
+- Root routes exist as BYOK compatibility aliases for clients that treat the configured base URL as the origin and append `/chat/completions`, `/responses`, or `/models`.
 - Both route sets must use the same proxy handler instance, bearer auth middleware, router index, scheduler, and monitor submission behavior.
 - Both route sets must require the same `Authorization: Bearer <proxy-hub-api-key>` header.
+- `POST /v1/responses` and `POST /responses` are transparent OpenAI-compatible Responses API pass-through routes: parse the top-level `model` and optional `stream`, apply alias routing/model replacement, then relay the upstream body without converting it to Chat Completions.
 
 #### 4. Validation & Error Matrix
 - Missing or invalid bearer token on either route set -> HTTP 401 OpenAI-compatible `invalid_api_key`.
-- Unknown model on either chat route -> HTTP 404 OpenAI-compatible `model_not_found`.
+- Unknown model on either chat or responses route -> HTTP 404 OpenAI-compatible `model_not_found`.
 - Unknown API route outside these aliases -> HTTP 404 admin-style `{ "error": "not found" }`.
 
 #### 5. Good/Base/Bad Cases
-- Good: BYOK client configured with `http://localhost:8787` can call `/chat/completions`.
-- Base: OpenAI SDK configured with `http://localhost:8787/v1` can call `/v1/chat/completions`.
-- Bad: root `/chat/completions` falls through to SPA/API fallback and returns generic `{"error":"not found"}`.
+- Good: BYOK client configured with `http://localhost:8787` can call `/chat/completions` or `/responses`.
+- Base: OpenAI SDK configured with `http://localhost:8787/v1` can call `/v1/chat/completions` or `/v1/responses`.
+- Bad: root `/responses` falls through to SPA/API fallback and returns generic `{"error":"not found"}`.
 
 #### 6. Tests Required
 - Server httptest for `/v1/models` requiring bearer auth.
 - Server httptest for `/v1/chat/completions` alias routing to upstream model.
 - Regression test for `/chat/completions` with a configured model alias returning the same successful upstream response.
+- Server httptest for `/v1/responses` alias routing to upstream model.
+- Regression test for `/responses` with a configured model alias returning the same successful upstream response.
 
 #### 7. Wrong vs Correct
 

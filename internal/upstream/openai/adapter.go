@@ -27,37 +27,77 @@ func New(client *http.Client) *Adapter {
 }
 
 func (a *Adapter) Chat(ctx context.Context, req upstream.ChatRequest) (*upstream.ChatResponse, error) {
-	if strings.TrimSpace(req.APIKey) == "" {
+	return a.postModelRequest(ctx, modelRequest{
+		operation:         "chat",
+		path:              "/v1/chat/completions",
+		baseURL:           req.BaseURL,
+		apiKey:            req.APIKey,
+		upstreamModelName: req.UpstreamModelName,
+		originalBody:      req.OriginalBody,
+		stream:            req.Stream,
+		headers:           req.Headers,
+		timeout:           req.Timeout,
+	})
+}
+
+func (a *Adapter) Responses(ctx context.Context, req upstream.ResponsesRequest) (*upstream.ChatResponse, error) {
+	return a.postModelRequest(ctx, modelRequest{
+		operation:         "responses",
+		path:              "/v1/responses",
+		baseURL:           req.BaseURL,
+		apiKey:            req.APIKey,
+		upstreamModelName: req.UpstreamModelName,
+		originalBody:      req.OriginalBody,
+		stream:            req.Stream,
+		headers:           req.Headers,
+		timeout:           req.Timeout,
+	})
+}
+
+type modelRequest struct {
+	operation         string
+	path              string
+	baseURL           string
+	apiKey            string
+	upstreamModelName string
+	originalBody      []byte
+	stream            bool
+	headers           http.Header
+	timeout           time.Duration
+}
+
+func (a *Adapter) postModelRequest(ctx context.Context, req modelRequest) (*upstream.ChatResponse, error) {
+	if strings.TrimSpace(req.apiKey) == "" {
 		return nil, errors.New("api key is required")
 	}
-	body, err := ReplaceModel(req.OriginalBody, req.UpstreamModelName)
+	body, err := ReplaceModel(req.originalBody, req.upstreamModelName)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := withTimeout(ctx, req.Timeout)
+	ctx, cancel := withTimeout(ctx, req.timeout)
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, joinBaseURL(req.BaseURL, "/v1/chat/completions"), bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, joinBaseURL(req.baseURL, req.path), bytes.NewReader(body))
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("create upstream chat request: %w", err)
+		return nil, fmt.Errorf("create upstream %s request: %w", req.operation, err)
 	}
-	copyHeaders(httpReq.Header, req.Headers)
-	httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
+	copyHeaders(httpReq.Header, req.headers)
+	httpReq.Header.Set("Authorization", "Bearer "+req.apiKey)
 	if httpReq.Header.Get("Content-Type") == "" {
 		httpReq.Header.Set("Content-Type", "application/json")
 	}
-	httpReq.Header.Set("Accept", acceptHeader(req.Stream))
+	httpReq.Header.Set("Accept", acceptHeader(req.stream))
 
 	resp, err := a.client.Do(httpReq)
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("send upstream chat request: %w", err)
+		return nil, fmt.Errorf("send upstream %s request: %w", req.operation, err)
 	}
 	return &upstream.ChatResponse{
 		StatusCode: resp.StatusCode,
 		Header:     resp.Header.Clone(),
 		Body:       cancelReadCloser{ReadCloser: resp.Body, cancel: cancel},
-		Stream:     req.Stream,
+		Stream:     req.stream,
 	}, nil
 }
 
@@ -111,7 +151,7 @@ func ReplaceModel(body []byte, model string) ([]byte, error) {
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("decode chat request body: %w", err)
+		return nil, fmt.Errorf("decode model request body: %w", err)
 	}
 	payload["model"] = model
 	next, err := json.Marshal(payload)

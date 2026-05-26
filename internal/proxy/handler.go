@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -22,7 +23,7 @@ import (
 	"proxy-hub/internal/upstream/openai"
 )
 
-const maxChatBodyBytes = 10 << 20
+const maxModelRequestBodyBytes = 10 << 20
 
 type Handler struct {
 	config    *config.Manager
@@ -59,6 +60,7 @@ func NewHandler(configManager *config.Manager, sched *scheduler.Scheduler, monit
 func (h *Handler) Register(r gin.IRouter) {
 	r.GET("/models", h.models)
 	r.POST("/chat/completions", h.chatCompletions)
+	r.POST("/responses", h.responses)
 }
 
 func (h *Handler) models(c *gin.Context) {
@@ -72,14 +74,53 @@ func (h *Handler) models(c *gin.Context) {
 }
 
 func (h *Handler) chatCompletions(c *gin.Context) {
+	h.modelRequest(c, modelProxyEndpoint{
+		unsupportedChannelMessage: "chatgpt-oauth upstream is not implemented yet",
+		call: func(ctx context.Context, selection scheduler.Selection, body []byte, meta modelRequestMeta, headers http.Header) (*upstream.ChatResponse, error) {
+			return h.openai.Chat(ctx, upstream.ChatRequest{
+				BaseURL:           selection.Hit.BaseURL,
+				APIKey:            selection.APIKey,
+				UpstreamModelName: selection.Hit.UpstreamModelName,
+				OriginalBody:      body,
+				Stream:            meta.Stream,
+				Headers:           headers,
+				Timeout:           selection.Hit.Timeout,
+			})
+		},
+	})
+}
+
+func (h *Handler) responses(c *gin.Context) {
+	h.modelRequest(c, modelProxyEndpoint{
+		unsupportedChannelMessage: "chatgpt-oauth upstream responses endpoint is not implemented yet",
+		call: func(ctx context.Context, selection scheduler.Selection, body []byte, meta modelRequestMeta, headers http.Header) (*upstream.ChatResponse, error) {
+			return h.openai.Responses(ctx, upstream.ResponsesRequest{
+				BaseURL:           selection.Hit.BaseURL,
+				APIKey:            selection.APIKey,
+				UpstreamModelName: selection.Hit.UpstreamModelName,
+				OriginalBody:      body,
+				Stream:            meta.Stream,
+				Headers:           headers,
+				Timeout:           selection.Hit.Timeout,
+			})
+		},
+	})
+}
+
+type modelProxyEndpoint struct {
+	unsupportedChannelMessage string
+	call                      func(context.Context, scheduler.Selection, []byte, modelRequestMeta, http.Header) (*upstream.ChatResponse, error)
+}
+
+func (h *Handler) modelRequest(c *gin.Context, endpoint modelProxyEndpoint) {
 	start := time.Now()
-	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxChatBodyBytes))
+	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxModelRequestBodyBytes))
 	if err != nil {
 		auth.AbortOpenAIError(c, http.StatusBadRequest, "Request body is too large or invalid.", "invalid_request_error", "invalid_request")
 		h.submitLog(c, requestLogInput{start: start, statusCode: http.StatusBadRequest, errorKind: "invalid_request", errorMessage: "request body is too large or invalid"})
 		return
 	}
-	meta, err := parseChatMeta(body)
+	meta, err := parseModelRequestMeta(body)
 	if err != nil {
 		auth.AbortOpenAIError(c, http.StatusBadRequest, err.Error(), "invalid_request_error", "invalid_request")
 		h.submitLog(c, requestLogInput{start: start, statusCode: http.StatusBadRequest, downstreamModel: meta.Model, errorKind: "invalid_request", errorMessage: err.Error()})
@@ -106,19 +147,11 @@ func (h *Handler) chatCompletions(c *gin.Context) {
 	for _, selection := range selections {
 		attempts++
 		if selection.Hit.ChannelType != config.ChannelTypeOpenAIAPI {
-			last = upstreamFailure{status: http.StatusNotImplemented, message: "chatgpt-oauth upstream is not implemented yet", code: "unsupported_channel"}
+			last = upstreamFailure{status: http.StatusNotImplemented, message: endpoint.unsupportedChannelMessage, code: "unsupported_channel"}
 			h.scheduler.ReportFailure(selection.Hit.ChannelName)
 			continue
 		}
-		resp, err := h.openai.Chat(c.Request.Context(), upstream.ChatRequest{
-			BaseURL:           selection.Hit.BaseURL,
-			APIKey:            selection.APIKey,
-			UpstreamModelName: selection.Hit.UpstreamModelName,
-			OriginalBody:      body,
-			Stream:            meta.Stream,
-			Headers:           c.Request.Header,
-			Timeout:           selection.Hit.Timeout,
-		})
+		resp, err := endpoint.call(c.Request.Context(), selection, body, meta, c.Request.Header)
 		if err != nil {
 			last = upstreamFailure{status: http.StatusGatewayTimeout, message: err.Error(), code: "upstream_timeout"}
 			h.scheduler.ReportFailure(selection.Hit.ChannelName)
@@ -211,19 +244,19 @@ func (h *Handler) writeFailure(c *gin.Context, failure upstreamFailure) {
 	auth.AbortOpenAIError(c, status, message, typ, code)
 }
 
-type chatMeta struct {
+type modelRequestMeta struct {
 	Model  string `json:"model"`
 	Stream bool   `json:"stream"`
 }
 
-func parseChatMeta(body []byte) (chatMeta, error) {
-	var meta chatMeta
+func parseModelRequestMeta(body []byte) (modelRequestMeta, error) {
+	var meta modelRequestMeta
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if err := decoder.Decode(&meta); err != nil {
-		return chatMeta{}, errors.New("Request body must be valid JSON.")
+		return modelRequestMeta{}, errors.New("Request body must be valid JSON.")
 	}
 	if meta.Model == "" {
-		return chatMeta{}, errors.New("Request body must include model.")
+		return modelRequestMeta{}, errors.New("Request body must include model.")
 	}
 	return meta, nil
 }
@@ -353,13 +386,23 @@ func parseUsage(body []byte) (*int64, *int64, *int64) {
 		Usage struct {
 			PromptTokens     *int64 `json:"prompt_tokens"`
 			CompletionTokens *int64 `json:"completion_tokens"`
+			InputTokens      *int64 `json:"input_tokens"`
+			OutputTokens     *int64 `json:"output_tokens"`
 			TotalTokens      *int64 `json:"total_tokens"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, nil, nil
 	}
-	return payload.Usage.PromptTokens, payload.Usage.CompletionTokens, payload.Usage.TotalTokens
+	promptTokens := payload.Usage.PromptTokens
+	if promptTokens == nil {
+		promptTokens = payload.Usage.InputTokens
+	}
+	completionTokens := payload.Usage.CompletionTokens
+	if completionTokens == nil {
+		completionTokens = payload.Usage.OutputTokens
+	}
+	return promptTokens, completionTokens, payload.Usage.TotalTokens
 }
 
 func (h *Handler) logRequestBody(cfg *config.Config, body []byte, failed bool) []byte {
