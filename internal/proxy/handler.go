@@ -75,6 +75,7 @@ func (h *Handler) models(c *gin.Context) {
 
 func (h *Handler) chatCompletions(c *gin.Context) {
 	h.modelRequest(c, modelProxyEndpoint{
+		requestType:               "chat.completions",
 		unsupportedChannelMessage: "chatgpt-oauth upstream is not implemented yet",
 		call: func(ctx context.Context, selection scheduler.Selection, body []byte, meta modelRequestMeta, headers http.Header) (*upstream.ChatResponse, error) {
 			return h.openai.Chat(ctx, upstream.ChatRequest{
@@ -92,6 +93,7 @@ func (h *Handler) chatCompletions(c *gin.Context) {
 
 func (h *Handler) responses(c *gin.Context) {
 	h.modelRequest(c, modelProxyEndpoint{
+		requestType:               "responses",
 		unsupportedChannelMessage: "chatgpt-oauth upstream responses endpoint is not implemented yet",
 		call: func(ctx context.Context, selection scheduler.Selection, body []byte, meta modelRequestMeta, headers http.Header) (*upstream.ChatResponse, error) {
 			return h.openai.Responses(ctx, upstream.ResponsesRequest{
@@ -108,6 +110,7 @@ func (h *Handler) responses(c *gin.Context) {
 }
 
 type modelProxyEndpoint struct {
+	requestType               string
 	unsupportedChannelMessage string
 	call                      func(context.Context, scheduler.Selection, []byte, modelRequestMeta, http.Header) (*upstream.ChatResponse, error)
 }
@@ -117,20 +120,20 @@ func (h *Handler) modelRequest(c *gin.Context, endpoint modelProxyEndpoint) {
 	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxModelRequestBodyBytes))
 	if err != nil {
 		auth.AbortOpenAIError(c, http.StatusBadRequest, "Request body is too large or invalid.", "invalid_request_error", "invalid_request")
-		h.submitLog(c, requestLogInput{start: start, statusCode: http.StatusBadRequest, errorKind: "invalid_request", errorMessage: "request body is too large or invalid"})
+		h.submitLog(c, requestLogInput{start: start, endpoint: c.Request.URL.Path, requestType: endpoint.requestType, statusCode: http.StatusBadRequest, errorKind: "invalid_request", errorMessage: "request body is too large or invalid"})
 		return
 	}
 	meta, err := parseModelRequestMeta(body)
 	if err != nil {
 		auth.AbortOpenAIError(c, http.StatusBadRequest, err.Error(), "invalid_request_error", "invalid_request")
-		h.submitLog(c, requestLogInput{start: start, statusCode: http.StatusBadRequest, downstreamModel: meta.Model, errorKind: "invalid_request", errorMessage: err.Error()})
+		h.submitLog(c, requestLogInput{start: start, endpoint: c.Request.URL.Path, requestType: endpoint.requestType, statusCode: http.StatusBadRequest, downstreamModel: meta.Model, reasoningEffort: meta.EffectiveReasoningEffort(), errorKind: "invalid_request", errorMessage: err.Error()})
 		return
 	}
 	idx := h.index.Load()
 	hits := idx.Resolve(meta.Model)
 	if len(hits) == 0 {
 		auth.AbortOpenAIError(c, http.StatusNotFound, "The requested model was not found.", "invalid_request_error", "model_not_found")
-		h.submitLog(c, requestLogInput{start: start, statusCode: http.StatusNotFound, downstreamModel: meta.Model, isStream: meta.Stream, errorKind: "model_not_found", errorMessage: "model not found"})
+		h.submitLog(c, requestLogInput{start: start, endpoint: c.Request.URL.Path, requestType: endpoint.requestType, statusCode: http.StatusNotFound, downstreamModel: meta.Model, isStream: meta.Stream, reasoningEffort: meta.EffectiveReasoningEffort(), errorKind: "model_not_found", errorMessage: "model not found"})
 		return
 	}
 
@@ -138,7 +141,7 @@ func (h *Handler) modelRequest(c *gin.Context, endpoint modelProxyEndpoint) {
 	selections := h.scheduler.Pick(hits, cfg.EffectiveMaxRetries()+1)
 	if len(selections) == 0 {
 		auth.AbortOpenAIError(c, http.StatusServiceUnavailable, "No available upstream channel.", "upstream_error", "no_available_channel")
-		h.submitLog(c, requestLogInput{start: start, statusCode: http.StatusServiceUnavailable, downstreamModel: meta.Model, isStream: meta.Stream, errorKind: "no_available_channel", errorMessage: "no available upstream channel"})
+		h.submitLog(c, requestLogInput{start: start, endpoint: c.Request.URL.Path, requestType: endpoint.requestType, statusCode: http.StatusServiceUnavailable, downstreamModel: meta.Model, isStream: meta.Stream, reasoningEffort: meta.EffectiveReasoningEffort(), errorKind: "no_available_channel", errorMessage: "no available upstream channel"})
 		return
 	}
 
@@ -165,6 +168,8 @@ func (h *Handler) modelRequest(c *gin.Context, endpoint modelProxyEndpoint) {
 		h.scheduler.ReportSuccess(selection.Hit.ChannelName)
 		logInput := requestLogInput{
 			start:            start,
+			endpoint:         c.Request.URL.Path,
+			requestType:      endpoint.requestType,
 			statusCode:       resp.StatusCode,
 			downstreamModel:  meta.Model,
 			upstreamModel:    selection.Hit.UpstreamModelName,
@@ -172,15 +177,17 @@ func (h *Handler) modelRequest(c *gin.Context, endpoint modelProxyEndpoint) {
 			channelType:      selection.Hit.ChannelType,
 			upstreamKeyIndex: intPtr(selection.APIKeyEntryIndex),
 			isStream:         meta.Stream,
+			reasoningEffort:  meta.EffectiveReasoningEffort(),
+			billingMode:      "token",
 			attempts:         attempts,
 			requestBody:      h.logRequestBody(cfg, body, false),
 		}
 		if meta.Stream {
-			h.relay(c, resp)
+			logInput.firstTokenMS = h.relay(c, resp, start)
 			h.submitLog(c, logInput)
 			return
 		}
-		responseBody, err := readAndClose(resp.Body)
+		responseBody, firstTokenMS, err := readAndClose(resp.Body, start)
 		if err != nil {
 			h.logger.Warn("failed to read upstream response", "error", err)
 			logInput.statusCode = http.StatusBadGateway
@@ -190,6 +197,7 @@ func (h *Handler) modelRequest(c *gin.Context, endpoint modelProxyEndpoint) {
 			auth.AbortOpenAIError(c, http.StatusBadGateway, "Failed to read upstream response.", "upstream_error", "bad_gateway")
 			return
 		}
+		logInput.firstTokenMS = firstTokenMS
 		logInput.promptTokens, logInput.completionTokens, logInput.totalTokens = parseUsage(responseBody)
 		logInput.responseBody = h.logResponseBody(cfg, responseBody, false)
 		h.writeBuffered(c, resp, responseBody)
@@ -200,9 +208,13 @@ func (h *Handler) modelRequest(c *gin.Context, endpoint modelProxyEndpoint) {
 	status, _, code := classifyFailure(last)
 	h.submitLog(c, requestLogInput{
 		start:           start,
+		endpoint:        c.Request.URL.Path,
+		requestType:     endpoint.requestType,
 		statusCode:      status,
 		downstreamModel: meta.Model,
 		isStream:        meta.Stream,
+		reasoningEffort: meta.EffectiveReasoningEffort(),
+		billingMode:     "token",
 		errorKind:       code,
 		errorMessage:    last.message,
 		attempts:        attempts,
@@ -215,16 +227,18 @@ func (h *Handler) rebuildIndex(cfg *config.Config) {
 	h.index.Store(routeindex.NewIndex(cfg))
 }
 
-func (h *Handler) relay(c *gin.Context, resp *upstream.ChatResponse) {
+func (h *Handler) relay(c *gin.Context, resp *upstream.ChatResponse, start time.Time) *int64 {
 	defer resp.Body.Close()
 	copyResponseHeaders(c.Writer.Header(), resp.Header)
 	c.Status(resp.StatusCode)
-	if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+	reader := &firstByteReader{reader: resp.Body, start: start}
+	if _, err := io.Copy(c.Writer, reader); err != nil {
 		h.logger.Warn("failed to relay upstream response", "error", err)
 	}
 	if flusher, ok := c.Writer.(http.Flusher); ok {
 		flusher.Flush()
 	}
+	return reader.firstMS
 }
 
 func (h *Handler) writeBuffered(c *gin.Context, resp *upstream.ChatResponse, body []byte) {
@@ -245,8 +259,19 @@ func (h *Handler) writeFailure(c *gin.Context, failure upstreamFailure) {
 }
 
 type modelRequestMeta struct {
-	Model  string `json:"model"`
-	Stream bool   `json:"stream"`
+	Model           string `json:"model"`
+	Stream          bool   `json:"stream"`
+	ReasoningEffort string `json:"reasoning_effort"`
+	Reasoning       struct {
+		Effort string `json:"effort"`
+	} `json:"reasoning"`
+}
+
+func (m modelRequestMeta) EffectiveReasoningEffort() string {
+	if m.ReasoningEffort != "" {
+		return m.ReasoningEffort
+	}
+	return m.Reasoning.Effort
 }
 
 func parseModelRequestMeta(body []byte) (modelRequestMeta, error) {
@@ -310,6 +335,8 @@ func copyResponseHeaders(dst, src http.Header) {
 
 type requestLogInput struct {
 	start            time.Time
+	endpoint         string
+	requestType      string
 	statusCode       int
 	downstreamModel  string
 	upstreamModel    string
@@ -317,6 +344,9 @@ type requestLogInput struct {
 	channelType      string
 	upstreamKeyIndex *int
 	isStream         bool
+	firstTokenMS     *int64
+	reasoningEffort  string
+	billingMode      string
 	promptTokens     *int64
 	completionTokens *int64
 	totalTokens      *int64
@@ -341,6 +371,8 @@ func (h *Handler) submitLog(c *gin.Context, input requestLogInput) {
 		TimestampMS:      input.start.UnixMilli(),
 		APIKeyTokenMask:  getString(c, "api_key_mask"),
 		APIKeyName:       getString(c, "api_key_name"),
+		Endpoint:         input.endpoint,
+		RequestType:      input.requestType,
 		ChannelName:      input.channelName,
 		ChannelType:      input.channelType,
 		DownstreamModel:  input.downstreamModel,
@@ -349,6 +381,9 @@ func (h *Handler) submitLog(c *gin.Context, input requestLogInput) {
 		StatusCode:       input.statusCode,
 		IsStream:         input.isStream,
 		DurationMS:       time.Since(input.start).Milliseconds(),
+		FirstTokenMS:     input.firstTokenMS,
+		ReasoningEffort:  input.reasoningEffort,
+		BillingMode:      input.billingMode,
 		PromptTokens:     input.promptTokens,
 		CompletionTokens: input.completionTokens,
 		TotalTokens:      input.totalTokens,
@@ -357,6 +392,7 @@ func (h *Handler) submitLog(c *gin.Context, input requestLogInput) {
 		RequestBody:      input.requestBody,
 		ResponseBody:     input.responseBody,
 		Attempts:         input.attempts,
+		UserAgent:        c.Request.UserAgent(),
 	})
 }
 
@@ -376,9 +412,26 @@ func getString(c *gin.Context, key string) string {
 	return text
 }
 
-func readAndClose(body io.ReadCloser) ([]byte, error) {
+func readAndClose(body io.ReadCloser, start time.Time) ([]byte, *int64, error) {
 	defer body.Close()
-	return io.ReadAll(body)
+	reader := &firstByteReader{reader: body, start: start}
+	data, err := io.ReadAll(reader)
+	return data, reader.firstMS, err
+}
+
+type firstByteReader struct {
+	reader  io.Reader
+	start   time.Time
+	firstMS *int64
+}
+
+func (r *firstByteReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	if n > 0 && r.firstMS == nil {
+		value := time.Since(r.start).Milliseconds()
+		r.firstMS = &value
+	}
+	return n, err
 }
 
 func parseUsage(body []byte) (*int64, *int64, *int64) {

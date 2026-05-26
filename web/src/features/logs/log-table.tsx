@@ -1,23 +1,53 @@
-import { DataTable } from "../../components/ui/data-table";
 import { Badge } from "../../components/ui/badge";
+import { DataTable } from "../../components/ui/data-table";
 import type { RequestLog } from "../../lib/types";
 
 export function LogTable({ logs, t }: { logs: RequestLog[]; t: (key: string) => string }) {
   return (
     <DataTable
+      className="request-log-table-wrap"
       empty={t("empty")}
-      headers={[t("latestRequest"), t("channelName"), t("model"), t("upstreamModel"), t("status"), t("duration"), t("attempts")]}
+      headers={[
+        t("apiKeyShort"),
+        t("model"),
+        t("reasoningEffort"),
+        t("endpoint"),
+        t("requestType"),
+        t("billingMode"),
+        t("token"),
+        t("cost"),
+        t("firstToken"),
+        t("duration"),
+        t("time"),
+        t("userAgent"),
+      ]}
       rows={logs.map((log) => [
-        formatTime(log.ts),
-        log.channelName || "-",
-        log.downstreamModel,
-        log.upstreamModel || "-",
-        <Badge key={`${log.id}-status`} variant={statusVariant(log.statusCode)}>
-          {log.statusCode}
-        </Badge>,
-        `${log.durationMs}ms`,
-        log.attempts,
+        <StackCell key={`${log.id}-key`} primary={log.apiKeyName || log.apiKeyTokenMask || "-"} secondary={log.apiKeyName ? log.apiKeyTokenMask : undefined} />,
+        <StackCell
+          key={`${log.id}-model`}
+          primary={log.downstreamModel || "-"}
+          secondary={modelSecondary(log)}
+        />,
+        <ValueCell key={`${log.id}-reasoning`} value={log.reasoningEffort || "-"} />,
+        <code key={`${log.id}-endpoint`} className="log-endpoint" title={log.endpoint || "-"}>
+          {log.endpoint || "-"}
+        </code>,
+        <div key={`${log.id}-type`} className="log-type-cell">
+          <span>{formatRequestType(log)}</span>
+          <Badge variant={statusVariant(log.statusCode)}>{log.statusCode}</Badge>
+          {log.attempts > 1 && <span className="log-attempts">x{log.attempts}</span>}
+        </div>,
+        <ValueCell key={`${log.id}-billing`} value={formatBillingMode(log.billingMode, t)} />,
+        <TokenCell key={`${log.id}-tokens`} log={log} />,
+        <ValueCell key={`${log.id}-cost`} value="-" muted />,
+        <ValueCell key={`${log.id}-first-token`} value={formatMS(log.firstTokenMs)} />,
+        <ValueCell key={`${log.id}-duration`} value={formatMS(log.durationMs)} />,
+        <StackCell key={`${log.id}-time`} primary={formatDate(log.ts)} secondary={formatTime(log.ts)} />,
+        <code key={`${log.id}-ua`} className="log-user-agent" title={log.userAgent || "-"}>
+          {log.userAgent || "-"}
+        </code>,
       ])}
+      tableClassName="request-log-table"
     />
   );
 }
@@ -32,10 +62,73 @@ function statusVariant(statusCode: number) {
   return "muted";
 }
 
+function modelSecondary(log: RequestLog) {
+  const parts = [log.channelName, log.upstreamModel && log.upstreamModel !== log.downstreamModel ? log.upstreamModel : undefined].filter(Boolean);
+  return parts.length > 0 ? parts.join(" / ") : undefined;
+}
+
+function formatRequestType(log: RequestLog) {
+  if (log.requestType) {
+    return log.requestType;
+  }
+  return log.isStream ? "stream" : "sync";
+}
+
+function formatBillingMode(value: string | undefined, t: (key: string) => string) {
+  if (!value) {
+    return "-";
+  }
+  if (value === "token") {
+    return t("tokenBilling");
+  }
+  return value;
+}
+
+function formatMS(value: number | undefined) {
+  if (value === undefined || value === null) {
+    return "-";
+  }
+  return `${value.toLocaleString()}ms`;
+}
+
+function formatDate(ts: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(ts));
+}
+
 function formatTime(ts: number) {
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   }).format(new Date(ts));
+}
+
+function StackCell({ primary, secondary }: { primary: string; secondary?: string }) {
+  return (
+    <span className="table-cell-stack log-stack-cell">
+      <strong>{primary}</strong>
+      {secondary && <span>{secondary}</span>}
+    </span>
+  );
+}
+
+function ValueCell({ muted, value }: { muted?: boolean; value: string }) {
+  return <span className={muted ? "muted-text" : undefined}>{value}</span>;
+}
+
+function TokenCell({ log }: { log: RequestLog }) {
+  const hasBreakdown = log.promptTokens !== undefined || log.completionTokens !== undefined;
+  return (
+    <span className="table-cell-stack log-token-cell">
+      <strong>{log.totalTokens?.toLocaleString() ?? "-"}</strong>
+      {hasBreakdown && (
+        <span>
+          {log.promptTokens?.toLocaleString() ?? "-"} / {log.completionTokens?.toLocaleString() ?? "-"}
+        </span>
+      )}
+    </span>
+  );
 }

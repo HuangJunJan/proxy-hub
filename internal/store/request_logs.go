@@ -17,11 +17,13 @@ func (s *SQLiteStore) BatchInsert(ctx context.Context, entries []LogEntry) error
 	}
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO request_logs (
-			ts, api_key_token_mask, api_key_name, channel_name, channel_type,
+			ts, api_key_token_mask, api_key_name, endpoint, request_type,
+			channel_name, channel_type,
 			downstream_model, upstream_model, upstream_key_index, status_code,
-			is_stream, duration_ms, prompt_tokens, completion_tokens, total_tokens,
-			error_kind, error_message, request_body, response_body, attempts
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			is_stream, duration_ms, first_token_ms, reasoning_effort, billing_mode,
+			prompt_tokens, completion_tokens, total_tokens, error_kind, error_message,
+			request_body, response_body, attempts, user_agent
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		_ = tx.Rollback()
@@ -38,6 +40,8 @@ func (s *SQLiteStore) BatchInsert(ctx context.Context, entries []LogEntry) error
 			entry.TimestampMS,
 			entry.APIKeyTokenMask,
 			nullString(entry.APIKeyName),
+			nullString(entry.Endpoint),
+			nullString(entry.RequestType),
 			nullString(entry.ChannelName),
 			nullString(entry.ChannelType),
 			entry.DownstreamModel,
@@ -46,6 +50,9 @@ func (s *SQLiteStore) BatchInsert(ctx context.Context, entries []LogEntry) error
 			entry.StatusCode,
 			boolInt(entry.IsStream),
 			entry.DurationMS,
+			nullInt64(entry.FirstTokenMS),
+			nullString(entry.ReasoningEffort),
+			nullString(entry.BillingMode),
 			nullInt64(entry.PromptTokens),
 			nullInt64(entry.CompletionTokens),
 			nullInt64(entry.TotalTokens),
@@ -54,6 +61,7 @@ func (s *SQLiteStore) BatchInsert(ctx context.Context, entries []LogEntry) error
 			nullBytes(entry.RequestBody),
 			nullBytes(entry.ResponseBody),
 			attempts,
+			nullString(entry.UserAgent),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("insert request log: %w", err)
@@ -76,10 +84,12 @@ func (s *SQLiteStore) Query(ctx context.Context, filter QueryFilter) ([]LogEntry
 
 	query := strings.Builder{}
 	query.WriteString(`
-		SELECT id, ts, api_key_token_mask, api_key_name, channel_name, channel_type,
+		SELECT id, ts, api_key_token_mask, api_key_name, endpoint, request_type,
+			channel_name, channel_type,
 			downstream_model, upstream_model, upstream_key_index, status_code,
-			is_stream, duration_ms, prompt_tokens, completion_tokens, total_tokens,
-			error_kind, error_message, request_body, response_body, attempts
+			is_stream, duration_ms, first_token_ms, reasoning_effort, billing_mode,
+			prompt_tokens, completion_tokens, total_tokens, error_kind, error_message,
+			request_body, response_body, attempts, user_agent
 		FROM request_logs
 		WHERE 1 = 1
 	`)
@@ -141,17 +151,19 @@ type rowScanner interface {
 
 func scanLogEntry(row rowScanner) (LogEntry, error) {
 	var entry LogEntry
-	var apiKeyName, channelName, channelType, upstreamModel sql.NullString
+	var apiKeyName, endpoint, requestType, channelName, channelType, upstreamModel sql.NullString
 	var upstreamKeyIndex sql.NullInt64
 	var isStream int
-	var promptTokens, completionTokens, totalTokens sql.NullInt64
-	var errorKind, errorMessage sql.NullString
+	var firstTokenMS, promptTokens, completionTokens, totalTokens sql.NullInt64
+	var reasoningEffort, billingMode, errorKind, errorMessage, userAgent sql.NullString
 	var requestBody, responseBody []byte
 	if err := row.Scan(
 		&entry.ID,
 		&entry.TimestampMS,
 		&entry.APIKeyTokenMask,
 		&apiKeyName,
+		&endpoint,
+		&requestType,
 		&channelName,
 		&channelType,
 		&entry.DownstreamModel,
@@ -160,6 +172,9 @@ func scanLogEntry(row rowScanner) (LogEntry, error) {
 		&entry.StatusCode,
 		&isStream,
 		&entry.DurationMS,
+		&firstTokenMS,
+		&reasoningEffort,
+		&billingMode,
 		&promptTokens,
 		&completionTokens,
 		&totalTokens,
@@ -168,10 +183,13 @@ func scanLogEntry(row rowScanner) (LogEntry, error) {
 		&requestBody,
 		&responseBody,
 		&entry.Attempts,
+		&userAgent,
 	); err != nil {
 		return LogEntry{}, fmt.Errorf("scan request log: %w", err)
 	}
 	entry.APIKeyName = apiKeyName.String
+	entry.Endpoint = endpoint.String
+	entry.RequestType = requestType.String
 	entry.ChannelName = channelName.String
 	entry.ChannelType = channelType.String
 	entry.UpstreamModel = upstreamModel.String
@@ -180,6 +198,12 @@ func scanLogEntry(row rowScanner) (LogEntry, error) {
 		entry.UpstreamKeyIndex = &value
 	}
 	entry.IsStream = isStream != 0
+	if firstTokenMS.Valid {
+		value := firstTokenMS.Int64
+		entry.FirstTokenMS = &value
+	}
+	entry.ReasoningEffort = reasoningEffort.String
+	entry.BillingMode = billingMode.String
 	if promptTokens.Valid {
 		value := promptTokens.Int64
 		entry.PromptTokens = &value
@@ -196,6 +220,7 @@ func scanLogEntry(row rowScanner) (LogEntry, error) {
 	entry.ErrorMessage = errorMessage.String
 	entry.RequestBody = requestBody
 	entry.ResponseBody = responseBody
+	entry.UserAgent = userAgent.String
 	return entry, nil
 }
 

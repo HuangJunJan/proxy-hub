@@ -12,12 +12,15 @@ func TestRequestLogRepository(t *testing.T) {
 	defer store.Close()
 
 	keyIndex := 1
+	firstTokenMS := int64(37)
 	promptTokens := int64(12)
 	err := store.BatchInsert(ctx, []LogEntry{
 		{
 			TimestampMS:      1000,
 			APIKeyTokenMask:  "sk-...1234",
 			APIKeyName:       "local",
+			Endpoint:         "/v1/chat/completions",
+			RequestType:      "chat.completions",
 			ChannelName:      "openai",
 			ChannelType:      "openai-api",
 			DownstreamModel:  "gpt-4o",
@@ -26,8 +29,12 @@ func TestRequestLogRepository(t *testing.T) {
 			StatusCode:       200,
 			IsStream:         true,
 			DurationMS:       120,
+			FirstTokenMS:     &firstTokenMS,
+			ReasoningEffort:  "high",
+			BillingMode:      "token",
 			PromptTokens:     &promptTokens,
 			Attempts:         1,
+			UserAgent:        "proxy-hub-test-agent",
 		},
 		{
 			TimestampMS:     2000,
@@ -56,6 +63,17 @@ func TestRequestLogRepository(t *testing.T) {
 	}
 	if got[0].DownstreamModel != "gpt-5.4" || got[0].Attempts != 2 {
 		t.Fatalf("Query() entry = %+v", got[0])
+	}
+	all, err := store.Query(ctx, QueryFilter{})
+	if err != nil {
+		t.Fatalf("Query(all) error = %v", err)
+	}
+	first := all[len(all)-1]
+	if first.Endpoint != "/v1/chat/completions" || first.RequestType != "chat.completions" || first.ReasoningEffort != "high" || first.BillingMode != "token" || first.UserAgent != "proxy-hub-test-agent" {
+		t.Fatalf("context fields were not round-tripped: %+v", first)
+	}
+	if first.FirstTokenMS == nil || *first.FirstTokenMS != 37 {
+		t.Fatalf("FirstTokenMS = %v, want 37", first.FirstTokenMS)
 	}
 
 	deleted, err := store.DeleteBefore(ctx, 1500)

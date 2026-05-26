@@ -300,9 +300,10 @@ func TestChatCompletionsFailsOverAndLogsUsage(t *testing.T) {
 	router := NewRouter(Options{ConfigManager: manager, Sessions: testSessions(), Monitor: monitorService, Logs: db, Stats: db})
 
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hi"}]}`))
+		req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hi"}],"reasoning_effort":"high"}`))
 		req.Header.Set("Authorization", "Bearer sk-proxy-hub-test-token-1234567890")
 		req.Header.Set("content-type", "application/json")
+		req.Header.Set("User-Agent", "proxy-hub-test-agent")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -330,6 +331,24 @@ func TestChatCompletionsFailsOverAndLogsUsage(t *testing.T) {
 	}
 	if firstLog.TotalTokens == nil || *firstLog.TotalTokens != 8 {
 		t.Fatalf("first logged total tokens = %v, want 8", firstLog.TotalTokens)
+	}
+	if firstLog.Endpoint != "/v1/chat/completions" {
+		t.Fatalf("first logged endpoint = %q, want /v1/chat/completions", firstLog.Endpoint)
+	}
+	if firstLog.RequestType != "chat.completions" {
+		t.Fatalf("first logged request type = %q, want chat.completions", firstLog.RequestType)
+	}
+	if firstLog.ReasoningEffort != "high" {
+		t.Fatalf("first logged reasoning effort = %q, want high", firstLog.ReasoningEffort)
+	}
+	if firstLog.BillingMode != "token" {
+		t.Fatalf("first logged billing mode = %q, want token", firstLog.BillingMode)
+	}
+	if firstLog.UserAgent != "proxy-hub-test-agent" {
+		t.Fatalf("first logged user agent = %q, want proxy-hub-test-agent", firstLog.UserAgent)
+	}
+	if firstLog.FirstTokenMS == nil {
+		t.Fatalf("first logged first token ms = nil, want measured value")
 	}
 	if !bytes.Contains(firstLog.RequestBody, []byte(`"gpt-5.4"`)) || !bytes.Contains(firstLog.ResponseBody, []byte(`"usage"`)) {
 		t.Fatalf("bodyMode=always did not persist bodies: request=%s response=%s", string(firstLog.RequestBody), string(firstLog.ResponseBody))

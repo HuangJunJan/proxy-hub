@@ -63,6 +63,8 @@ export interface RequestLog {
   ts: number;
   apiKeyTokenMask: string;
   apiKeyName?: string;
+  endpoint?: string;
+  requestType?: string;
   channelName?: string;
   channelType?: string;
   downstreamModel: string;
@@ -71,12 +73,16 @@ export interface RequestLog {
   statusCode: number;
   isStream: boolean;
   durationMs: number;
+  firstTokenMs?: number;
+  reasoningEffort?: string;
+  billingMode?: string;
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
   errorKind?: string;
   errorMessage?: string;
   attempts: number;
+  userAgent?: string;
 }
 
 export interface LogsResponse {

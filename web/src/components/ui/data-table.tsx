@@ -1,17 +1,22 @@
 import { ReactNode } from "react";
+import { cn } from "../../lib/cn";
 
 export function DataTable({
+  className,
   empty,
   headers,
   rows,
+  tableClassName,
 }: {
+  className?: string;
   empty: string;
   headers: string[];
   rows: Array<Array<ReactNode>>;
+  tableClassName?: string;
 }) {
   return (
-    <div className="ui-table-wrap">
-      <table className="ui-table">
+    <div className={cn("ui-table-wrap", className)}>
+      <table className={cn("ui-table", tableClassName)}>
         <thead>
           <tr>
             {headers.map((header) => (

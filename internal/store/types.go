@@ -19,6 +19,8 @@ type LogEntry struct {
 	TimestampMS      int64  `json:"ts"`
 	APIKeyTokenMask  string `json:"apiKeyTokenMask"`
 	APIKeyName       string `json:"apiKeyName,omitempty"`
+	Endpoint         string `json:"endpoint,omitempty"`
+	RequestType      string `json:"requestType,omitempty"`
 	ChannelName      string `json:"channelName,omitempty"`
 	ChannelType      string `json:"channelType,omitempty"`
 	DownstreamModel  string `json:"downstreamModel"`
@@ -27,6 +29,9 @@ type LogEntry struct {
 	StatusCode       int    `json:"statusCode"`
 	IsStream         bool   `json:"isStream"`
 	DurationMS       int64  `json:"durationMs"`
+	FirstTokenMS     *int64 `json:"firstTokenMs,omitempty"`
+	ReasoningEffort  string `json:"reasoningEffort,omitempty"`
+	BillingMode      string `json:"billingMode,omitempty"`
 	PromptTokens     *int64 `json:"promptTokens,omitempty"`
 	CompletionTokens *int64 `json:"completionTokens,omitempty"`
 	TotalTokens      *int64 `json:"totalTokens,omitempty"`
@@ -35,6 +40,7 @@ type LogEntry struct {
 	RequestBody      []byte `json:"requestBody,omitempty"`
 	ResponseBody     []byte `json:"responseBody,omitempty"`
 	Attempts         int    `json:"attempts"`
+	UserAgent        string `json:"userAgent,omitempty"`
 }
 
 type QueryFilter struct {
