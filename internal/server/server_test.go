@@ -86,6 +86,36 @@ func TestChatCompletionsRoutesAliasToUpstreamModel(t *testing.T) {
 	}
 }
 
+func TestRootChatCompletionsRouteSupportsBYOKBaseURLWithoutV1(t *testing.T) {
+	var gotModel string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode upstream request: %v", err)
+		}
+		gotModel = payload.Model
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-test","object":"chat.completion","choices":[]}`))
+	}))
+	defer upstream.Close()
+
+	router := NewRouter(Options{ConfigManager: testConfigManager(t, upstream.URL), Sessions: testSessions()})
+	req := httptest.NewRequest(http.MethodPost, "/chat/completions", bytes.NewBufferString(`{"model":"gpt-5.4","messages":[]}`))
+	req.Header.Set("Authorization", "Bearer sk-proxy-hub-test-token-1234567890")
+	req.Header.Set("content-type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if gotModel != "deepseek-chat" {
+		t.Fatalf("upstream model = %q, want deepseek-chat", gotModel)
+	}
+}
+
 func TestChatCompletionsModelNotFoundLogHasNoUpstreamKeyIndex(t *testing.T) {
 	db, monitorService, stopMonitor := testMonitor(t)
 	defer stopMonitor()

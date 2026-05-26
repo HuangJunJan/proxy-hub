@@ -164,6 +164,61 @@ Correct:
 auth.AbortOpenAIError(c, http.StatusUnauthorized, "Invalid API key provided.", "invalid_request_error", "invalid_api_key")
 ```
 
+### OpenAI-Compatible Root Routes for BYOK Clients
+
+#### 1. Scope / Trigger
+- Trigger: registering OpenAI-compatible proxy routes in `internal/server`.
+
+#### 2. Signatures
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+- `GET /models`
+- `POST /chat/completions`
+
+#### 3. Contracts
+- `/v1/*` remains the documented OpenAI base URL contract.
+- Root routes exist as BYOK compatibility aliases for clients that treat the configured base URL as the origin and append `/chat/completions` or `/models`.
+- Both route sets must use the same proxy handler instance, bearer auth middleware, router index, scheduler, and monitor submission behavior.
+- Both route sets must require the same `Authorization: Bearer <proxy-hub-api-key>` header.
+
+#### 4. Validation & Error Matrix
+- Missing or invalid bearer token on either route set -> HTTP 401 OpenAI-compatible `invalid_api_key`.
+- Unknown model on either chat route -> HTTP 404 OpenAI-compatible `model_not_found`.
+- Unknown API route outside these aliases -> HTTP 404 admin-style `{ "error": "not found" }`.
+
+#### 5. Good/Base/Bad Cases
+- Good: BYOK client configured with `http://localhost:8787` can call `/chat/completions`.
+- Base: OpenAI SDK configured with `http://localhost:8787/v1` can call `/v1/chat/completions`.
+- Bad: root `/chat/completions` falls through to SPA/API fallback and returns generic `{"error":"not found"}`.
+
+#### 6. Tests Required
+- Server httptest for `/v1/models` requiring bearer auth.
+- Server httptest for `/v1/chat/completions` alias routing to upstream model.
+- Regression test for `/chat/completions` with a configured model alias returning the same successful upstream response.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+v1 := r.Group("/v1")
+v1.Use(requireBearer(opts.ConfigManager))
+proxy.NewHandler(opts.ConfigManager, nil, opts.Monitor, opts.Logger).Register(v1)
+```
+
+Correct:
+
+```go
+proxyHandler := proxy.NewHandler(opts.ConfigManager, nil, opts.Monitor, opts.Logger)
+v1 := r.Group("/v1")
+v1.Use(requireBearer(opts.ConfigManager))
+proxyHandler.Register(v1)
+
+openAICompat := r.Group("")
+openAICompat.Use(requireBearer(opts.ConfigManager))
+proxyHandler.Register(openAICompat)
+```
+
 ### Preserve Last-Mile Observability
 
 - Proxy handlers submit request logs after response relay when possible so duration covers actual relay time.

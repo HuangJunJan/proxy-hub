@@ -48,9 +48,14 @@ func NewRouter(opts Options) http.Handler {
 		if opts.Monitor != nil {
 			r.GET("/api/admin/requests/stream", adminHandler.RequireSession(), opts.Monitor.Stream)
 		}
+		proxyHandler := proxy.NewHandler(opts.ConfigManager, nil, opts.Monitor, opts.Logger)
 		v1 := r.Group("/v1")
 		v1.Use(requireBearer(opts.ConfigManager))
-		proxy.NewHandler(opts.ConfigManager, nil, opts.Monitor, opts.Logger).Register(v1)
+		proxyHandler.Register(v1)
+
+		openAICompat := r.Group("")
+		openAICompat.Use(requireBearer(opts.ConfigManager))
+		proxyHandler.Register(openAICompat)
 	}
 
 	spa := webui.Handler()
