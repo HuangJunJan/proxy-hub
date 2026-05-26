@@ -109,7 +109,7 @@ func (s *SQLiteStore) Query(ctx context.Context, filter QueryFilter) ([]LogEntry
 	}
 	defer rows.Close()
 
-	var entries []LogEntry
+	entries := make([]LogEntry, 0)
 	for rows.Next() {
 		entry, err := scanLogEntry(rows)
 		if err != nil {

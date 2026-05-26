@@ -24,6 +24,22 @@ go run ./cmd/proxy-hub --config ./config.example.yaml --no-browser
 curl http://localhost:8787/healthz
 ```
 
+## 本地联调
+
+一键启动后端和前端：
+
+```powershell
+.\scripts\dev.ps1
+```
+
+默认访问 `http://localhost:5173`，后端监听 `http://localhost:8787`，开发配置写入系统临时目录下的 `proxy-hub-dev\config.yaml`。
+
+常用参数：
+
+```powershell
+.\scripts\dev.ps1 -BackendPort 8788 -FrontendPort 5174 -SkipInstall
+```
+
 ## 前端
 
 ```powershell

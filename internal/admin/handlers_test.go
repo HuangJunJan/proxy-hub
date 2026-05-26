@@ -198,6 +198,55 @@ func TestAdminLogsAndStats(t *testing.T) {
 	}
 }
 
+func TestAdminEmptyLogsAndStatsReturnArrays(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	manager := readyConfigManager(t)
+	sessions := auth.NewSessionManagerWithSecret([]byte("01234567890123456789012345678901"))
+	db, err := store.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "proxy-hub.db"), nil)
+	if err != nil {
+		t.Fatalf("OpenSQLite() error = %v", err)
+	}
+	defer db.Close()
+
+	handler := NewHandler(manager, sessions, Dependencies{Logs: db, Stats: db})
+	r := gin.New()
+	handler.Register(r.Group("/api/admin"))
+	cookie := sessionCookie(t, sessions)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/logs", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("logs status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"items":[]`)) {
+		t.Fatalf("empty logs response did not return array: %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/stats/channels?window=24h", nil)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stats status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := bytes.TrimSpace(rec.Body.Bytes()); !bytes.Equal(got, []byte("[]")) {
+		t.Fatalf("empty stats response = %s, want []", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/stats/series?channel=openai&metric=requests&window=24h", nil)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("series status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := bytes.TrimSpace(rec.Body.Bytes()); !bytes.Equal(got, []byte("[]")) {
+		t.Fatalf("empty series response = %s, want []", got)
+	}
+}
+
 func readyConfigManager(t *testing.T) *config.Manager {
 	t.Helper()
 	manager := config.NewManager(filepath.Join(t.TempDir(), "config.yaml"), nil)

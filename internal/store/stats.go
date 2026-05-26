@@ -87,7 +87,7 @@ func (s *SQLiteStore) QueryChannelSummary(ctx context.Context, window TimeWindow
 	}
 	defer rows.Close()
 
-	var summaries []ChannelSummary
+	summaries := make([]ChannelSummary, 0)
 	for rows.Next() {
 		var summary ChannelSummary
 		if err := rows.Scan(
@@ -129,7 +129,7 @@ func (s *SQLiteStore) QuerySeries(ctx context.Context, channelName string, metri
 	}
 	defer rows.Close()
 
-	var points []Point
+	points := make([]Point, 0)
 	for rows.Next() {
 		var point Point
 		if err := rows.Scan(&point.TimestampMS, &point.Value); err != nil {

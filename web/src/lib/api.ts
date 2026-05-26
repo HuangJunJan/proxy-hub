@@ -27,6 +27,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.data;
 }
 
+async function requestArray<T>(path: string, init: RequestInit = {}): Promise<T[]> {
+  const data = await request<unknown>(path, init);
+  return Array.isArray(data) ? (data as T[]) : [];
+}
+
 export const api = {
   setupStatus: () => request<SetupStatus>("/api/admin/setup/status"),
   setup: (username: string, password: string) =>
@@ -56,7 +61,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ "base-url": baseUrl, "api-key": apiKey }),
     }),
-  keys: () => request<DownstreamKey[]>("/api/admin/keys"),
+  keys: () => requestArray<DownstreamKey>("/api/admin/keys"),
   createKey: (name: string, notes: string) =>
     request<{ token: string }>("/api/admin/keys", {
       method: "POST",
@@ -72,9 +77,9 @@ export const api = {
       method: "DELETE",
     }),
   logs: (params: URLSearchParams) => request<LogsResponse>(`/api/admin/logs?${params.toString()}`),
-  channelStats: (window: string) => request<ChannelSummary[]>(`/api/admin/stats/channels?window=${window}`),
+  channelStats: (window: string) => requestArray<ChannelSummary>(`/api/admin/stats/channels?window=${window}`),
   series: (channel: string, metric: string, window: string) =>
-    request<SeriesPoint[]>(
+    requestArray<SeriesPoint>(
       `/api/admin/stats/series?channel=${encodeURIComponent(channel)}&metric=${metric}&window=${window}`,
     ),
 };
