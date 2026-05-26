@@ -1,9 +1,9 @@
-# OS
+# 操作系统
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Editor / IDE
+# 编辑器 / IDE
 .vscode/
 .idea/
 *.swp
@@ -24,6 +24,15 @@ __pycache__/
 # 日志/临时
 *.log
 *.tmp
+
+# Go / 构建输出
+/dist/
+coverage.out
+
+# 前端
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
 
 # 环境变量
 .env

@@ -1,0 +1,57 @@
+# Proxy Hub 示例配置。
+# 运行前复制为 config.yaml，并替换其中的凭证。
+
+server:
+  port: 8787
+  # host 默认值为 0.0.0.0
+  # 打包版本中 open-browser 默认值为 true
+
+admin:
+  username: admin
+  password-hash: "$argon2id$v=19$m=65536,t=3,p=2$example$replace-me"
+
+api-keys:
+  - token: sk-proxy-hub-example-local-token-1234567890
+    name: local-dev
+
+openai-api:
+  - name: openai
+    base-url: https://api.openai.com
+    priority: 10
+    api-key-entries:
+      - api-key: sk-replace-me
+    models:
+      - name: gpt-4o
+      - name: gpt-4o-mini
+
+  - name: deepseek
+    base-url: https://api.deepseek.com
+    priority: 20
+    api-key-entries:
+      - api-key: sk-replace-me
+    models:
+      - name: deepseek-chat
+      - name: deepseek-chat
+        alias: gpt-5.4
+
+# chatgpt-oauth:
+#   - name: my-chatgpt-plus
+#     oauth:
+#       access-token: ey-replace-me
+#       refresh-token: rt-replace-me
+#       expires-at: 2026-05-26T11:00:00Z
+#     models:
+#       - name: gpt-5-codex
+
+request-log:
+  retention-days: 7
+  body-mode: failed_only
+
+scheduler:
+  max-retries: 2
+  circuit-cooldown-sec: 60
+  circuit-failure-threshold: 3
+
+# cors:
+#   allowed-origins:
+#     - https://example.com

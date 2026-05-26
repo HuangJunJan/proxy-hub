@@ -1,0 +1,136 @@
+package store
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+)
+
+func TestRequestLogRepository(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer store.Close()
+
+	keyIndex := 1
+	promptTokens := int64(12)
+	err := store.BatchInsert(ctx, []LogEntry{
+		{
+			TimestampMS:      1000,
+			APIKeyTokenMask:  "sk-...1234",
+			APIKeyName:       "local",
+			ChannelName:      "openai",
+			ChannelType:      "openai-api",
+			DownstreamModel:  "gpt-4o",
+			UpstreamModel:    "gpt-4o",
+			UpstreamKeyIndex: &keyIndex,
+			StatusCode:       200,
+			IsStream:         true,
+			DurationMS:       120,
+			PromptTokens:     &promptTokens,
+			Attempts:         1,
+		},
+		{
+			TimestampMS:     2000,
+			APIKeyTokenMask: "sk-...1234",
+			ChannelName:     "deepseek",
+			ChannelType:     "openai-api",
+			DownstreamModel: "gpt-5.4",
+			UpstreamModel:   "deepseek-chat",
+			StatusCode:      502,
+			DurationMS:      40,
+			ErrorKind:       "upstream_5xx",
+			RequestBody:     []byte(`{"model":"gpt-5.4"}`),
+			Attempts:        2,
+		},
+	})
+	if err != nil {
+		t.Fatalf("BatchInsert() error = %v", err)
+	}
+
+	got, err := store.Query(ctx, QueryFilter{ChannelName: "deepseek"})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Query() len = %d, want 1", len(got))
+	}
+	if got[0].DownstreamModel != "gpt-5.4" || got[0].Attempts != 2 {
+		t.Fatalf("Query() entry = %+v", got[0])
+	}
+
+	deleted, err := store.DeleteBefore(ctx, 1500)
+	if err != nil {
+		t.Fatalf("DeleteBefore() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("DeleteBefore() = %d, want 1", deleted)
+	}
+}
+
+func TestStatsRepository(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer store.Close()
+
+	err := store.UpsertHourly(ctx, []HourlyDelta{
+		{
+			ChannelName:      "openai",
+			HourTimestampMS:  0,
+			Requests:         2,
+			Successes:        2,
+			PromptTokens:     10,
+			CompletionTokens: 20,
+			TotalTokens:      30,
+			AvgDurationMS:    100,
+		},
+		{
+			ChannelName:     "openai",
+			HourTimestampMS: 0,
+			Requests:        1,
+			Failures:        1,
+			AvgDurationMS:   400,
+		},
+		{
+			ChannelName:     "deepseek",
+			HourTimestampMS: 3600000,
+			Requests:        1,
+			Successes:       1,
+			AvgDurationMS:   80,
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpsertHourly() error = %v", err)
+	}
+
+	summaries, err := store.QueryChannelSummary(ctx, TimeWindow{})
+	if err != nil {
+		t.Fatalf("QueryChannelSummary() error = %v", err)
+	}
+	if len(summaries) != 2 {
+		t.Fatalf("QueryChannelSummary() len = %d, want 2", len(summaries))
+	}
+	openai := summaries[1]
+	if openai.ChannelName != "openai" {
+		openai = summaries[0]
+	}
+	if openai.Requests != 3 || openai.Successes != 2 || openai.Failures != 1 || openai.AvgDurationMS != 200 {
+		t.Fatalf("openai summary = %+v", openai)
+	}
+
+	points, err := store.QuerySeries(ctx, "openai", MetricRequests, TimeWindow{})
+	if err != nil {
+		t.Fatalf("QuerySeries() error = %v", err)
+	}
+	if len(points) != 1 || points[0].Value != 3 {
+		t.Fatalf("QuerySeries() = %+v, want one point value 3", points)
+	}
+}
+
+func openTestStore(t *testing.T) *SQLiteStore {
+	t.Helper()
+	store, err := OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "proxy-hub.db"), nil)
+	if err != nil {
+		t.Fatalf("OpenSQLite() error = %v", err)
+	}
+	return store
+}
