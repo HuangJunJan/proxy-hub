@@ -117,6 +117,7 @@ BaseURL string `yaml:"base-url,omitempty" json:"base-url,omitempty"`
 - Never log upstream `api-key`, downstream bearer tokens, OAuth access tokens, or refresh tokens.
 - Request logs use `auth.MaskToken(token)` for downstream API keys.
 - Upstream keys may only appear as key index metadata, not plaintext.
+- Authenticated admin config APIs may return downstream API key plaintext for copy/edit UX because YAML is the configuration source of truth and stores these keys in plaintext. This exception does not apply to logs, metrics, proxy responses, or unauthenticated endpoints.
 
 ---
 

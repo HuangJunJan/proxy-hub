@@ -1,9 +1,11 @@
 import axios from "axios";
 import type {
   ChannelSummary,
+  ChannelHealthResult,
   ChannelsResponse,
   DownstreamKey,
   LogsResponse,
+  OAuthChannel,
   OpenAIChannel,
   SeriesPoint,
   SetupStatus,
@@ -52,9 +54,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify(channel),
     }),
+  updateChannel: (type: "chatgpt-oauth" | "openai-api", name: string, channel: OAuthChannel | OpenAIChannel) =>
+    request<void>(`/api/admin/channels/${type}/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify(channel),
+    }),
   deleteChannel: (type: string, name: string) =>
     request<void>(`/api/admin/channels/${type}/${encodeURIComponent(name)}`, {
       method: "DELETE",
+    }),
+  healthCheckChannel: (type: string, name: string) =>
+    request<ChannelHealthResult>(`/api/admin/channels/${type}/${encodeURIComponent(name)}/health`, {
+      method: "POST",
     }),
   probeModels: (baseUrl: string, apiKey: string) =>
     request<{ models: string[] }>("/api/admin/channels/probe-models", {

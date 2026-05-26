@@ -1,6 +1,5 @@
 import { Plus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
@@ -11,17 +10,23 @@ import { Toolbar } from "../components/ui/toolbar";
 import { ChannelList } from "../features/channels/channel-list";
 import { api, getErrorMessage } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
-import type { ChannelsResponse, ModelEntry, OpenAIChannel } from "../lib/types";
+import type { ChannelHealthResult, ChannelsResponse, ModelEntry, OAuthChannel, OpenAIChannel } from "../lib/types";
+
+type ChannelFormState = { alias: string; apiKey: string; baseUrl: string; model: string; name: string; priority: string };
+type ModelSelection = { alias: string; name: string; selected: boolean };
 
 const emptyChannels: ChannelsResponse = { "chatgpt-oauth": [], "openai-api": [] };
+const emptyForm: ChannelFormState = { alias: "", apiKey: "", baseUrl: "", model: "", name: "", priority: "100" };
 
 export function ChannelsPage() {
   const { t } = useAppContext();
   const [activeType, setActiveType] = useState<"chatgpt-oauth" | "openai-api">("openai-api");
   const [channels, setChannels] = useState<ChannelsResponse>(emptyChannels);
-  const [form, setForm] = useState({ alias: "", apiKey: "", baseUrl: "", model: "", name: "", priority: "100" });
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [probed, setProbed] = useState<string[]>([]);
+  const [form, setForm] = useState<ChannelFormState>(emptyForm);
+  const [health, setHealth] = useState<Record<string, ChannelHealthResult | undefined>>({});
+  const [editingChannel, setEditingChannel] = useState<OpenAIChannel | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [modelRows, setModelRows] = useState<ModelSelection[]>([]);
   const [error, setError] = useState("");
 
   async function refresh() {
@@ -37,20 +42,29 @@ export function ChannelsPage() {
     void refresh();
   }, []);
 
-  async function create(event: FormEvent) {
+  async function save(event: FormEvent) {
     event.preventDefault();
+    const models = selectedModels(form, modelRows);
+    if (models.length === 0) {
+      setError(t("modelRequired"));
+      return;
+    }
+
     const channel: OpenAIChannel = {
-      "api-key-entries": [{ "api-key": form.apiKey }],
+      ...(editingChannel ?? {}),
+      "api-key-entries": apiKeyEntriesForSave(editingChannel, form.apiKey),
       "base-url": form.baseUrl,
-      models: selectedModels(form.model, form.alias, probed),
+      models,
       name: form.name,
       priority: Number(form.priority || 100),
     };
     try {
-      await api.createOpenAIChannel(channel);
-      setForm({ alias: "", apiKey: "", baseUrl: "", model: "", name: "", priority: "100" });
-      setIsCreateOpen(false);
-      setProbed([]);
+      if (editingChannel) {
+        await api.updateChannel("openai-api", editingChannel.name, channel);
+      } else {
+        await api.createOpenAIChannel(channel);
+      }
+      resetForm();
       await refresh();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -60,8 +74,70 @@ export function ChannelsPage() {
   async function probe() {
     try {
       const result = await api.probeModels(form.baseUrl, form.apiKey);
-      setProbed(result.models);
+      const uniqueModels = Array.from(new Set(result.models));
+      setModelRows(uniqueModels.map((name) => ({ alias: name, name, selected: true })));
       setError("");
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function checkHealth(name: string) {
+    try {
+      const result = await api.healthCheckChannel("openai-api", name);
+      setHealth((current) => ({ ...current, [name]: result }));
+      setError("");
+    } catch (err) {
+      const message = getErrorMessage(err);
+      setHealth((current) => ({ ...current, [name]: { error: message, ok: false } }));
+      setError(message);
+    }
+  }
+
+  function startCreate() {
+    setEditingChannel(null);
+    setForm(emptyForm);
+    setModelRows([]);
+    setIsFormOpen(true);
+  }
+
+  function startEdit(channel: OpenAIChannel) {
+    setEditingChannel(channel);
+    setForm({
+      alias: "",
+      apiKey: channel["api-key-entries"]?.[0]?.["api-key"] ?? "",
+      baseUrl: channel["base-url"],
+      model: "",
+      name: channel.name,
+      priority: String(channel.priority || 100),
+    });
+    setModelRows(channel.models.map((model) => ({ alias: model.alias || model.name, name: model.name, selected: true })));
+    setIsFormOpen(true);
+  }
+
+  function resetForm() {
+    setEditingChannel(null);
+    setForm(emptyForm);
+    setIsFormOpen(false);
+    setModelRows([]);
+  }
+
+  async function toggleOpenAIChannel(channel: OpenAIChannel | OAuthChannel) {
+    if (!("base-url" in channel)) {
+      return;
+    }
+    try {
+      await api.updateChannel("openai-api", channel.name, { ...channel, disabled: !channel.disabled });
+      await refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function toggleOAuthChannel(channel: ChannelsResponse["chatgpt-oauth"][number]) {
+    try {
+      await api.updateChannel("chatgpt-oauth", channel.name, { ...channel, disabled: !channel.disabled });
+      await refresh();
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -71,23 +147,31 @@ export function ChannelsPage() {
     <section className="stack">
       <Toolbar
         actions={
-          <Sheet onOpenChange={setIsCreateOpen} open={isCreateOpen}>
+          <Sheet
+            onOpenChange={(open) => {
+              if (!open) {
+                resetForm();
+              }
+            }}
+            open={isFormOpen}
+          >
             <SheetTrigger asChild>
-              <Button type="button">
+              <Button onClick={startCreate} type="button">
                 <Plus size={16} />
                 {t("createChannel")}
               </Button>
             </SheetTrigger>
             <SheetContent>
               <SheetHeader>
-                <SheetTitle>{t("createChannel")}</SheetTitle>
+                <SheetTitle>{editingChannel ? t("editChannel") : t("createChannel")}</SheetTitle>
               </SheetHeader>
               <ChannelCreateForm
                 form={form}
+                modelRows={modelRows}
                 onProbe={probe}
-                onSubmit={create}
-                probed={probed}
+                onSubmit={save}
                 setForm={setForm}
+                setModelRows={setModelRows}
                 t={t}
               />
             </SheetContent>
@@ -107,22 +191,23 @@ export function ChannelsPage() {
         value={activeType}
       >
         <TabsList>
-          <TabsTrigger value="openai-api">
-            {t("openAIChannels")}
-          </TabsTrigger>
-          <TabsTrigger value="chatgpt-oauth">
-            {t("oauthChannels")}
-          </TabsTrigger>
+          <TabsTrigger value="openai-api">{t("openAIChannels")}</TabsTrigger>
+          <TabsTrigger value="chatgpt-oauth">{t("oauthChannels")}</TabsTrigger>
         </TabsList>
         <TabsContent value="openai-api">
           <ChannelList
+            health={health}
             items={channels["openai-api"]}
+            onCheckHealth={checkHealth}
             onDelete={async (name) => {
               await api.deleteChannel("openai-api", name);
               await refresh();
             }}
+            onEdit={startEdit}
+            onToggle={toggleOpenAIChannel}
             t={t}
             title={t("openAIChannels")}
+            type="openai-api"
           />
         </TabsContent>
         <TabsContent value="chatgpt-oauth">
@@ -132,8 +217,10 @@ export function ChannelsPage() {
               await api.deleteChannel("chatgpt-oauth", name);
               await refresh();
             }}
+            onToggle={toggleOAuthChannel}
             t={t}
             title={t("oauthChannels")}
+            type="chatgpt-oauth"
           />
         </TabsContent>
       </Tabs>
@@ -143,17 +230,19 @@ export function ChannelsPage() {
 
 function ChannelCreateForm({
   form,
+  modelRows,
   onProbe,
   onSubmit,
-  probed,
   setForm,
+  setModelRows,
   t,
 }: {
-  form: { alias: string; apiKey: string; baseUrl: string; model: string; name: string; priority: string };
+  form: ChannelFormState;
+  modelRows: ModelSelection[];
   onProbe: () => void;
   onSubmit: (event: FormEvent) => void;
-  probed: string[];
-  setForm: (form: { alias: string; apiKey: string; baseUrl: string; model: string; name: string; priority: string }) => void;
+  setForm: (form: ChannelFormState) => void;
+  setModelRows: (rows: ModelSelection[]) => void;
   t: (key: string) => string;
 }) {
   return (
@@ -176,7 +265,7 @@ function ChannelCreateForm({
         <Input type="number" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })} />
       </Field>
       <div className="row">
-        <Field label={t("modelName")}>
+        <Field label={t("manualModel")}>
           <Input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} />
         </Field>
         <Field label={t("alias")}>
@@ -186,23 +275,78 @@ function ChannelCreateForm({
       <Button onClick={onProbe} type="button" variant="outline">
         {t("probeModels")}
       </Button>
-      {probed.length > 0 && (
-        <div className="chip-list">
-          {probed.slice(0, 12).map((model) => (
-            <Badge key={model} variant="muted">
-              {model}
-            </Badge>
-          ))}
-        </div>
-      )}
+      {modelRows.length > 0 && <ModelSelector modelRows={modelRows} setModelRows={setModelRows} t={t} />}
       <Button type="submit">{t("save")}</Button>
     </form>
   );
 }
 
-function selectedModels(model: string, alias: string, probed: string[]): ModelEntry[] {
-  if (model.trim()) {
-    return [{ alias: alias.trim() || undefined, name: model.trim() }];
+function ModelSelector({
+  modelRows,
+  setModelRows,
+  t,
+}: {
+  modelRows: ModelSelection[];
+  setModelRows: (rows: ModelSelection[]) => void;
+  t: (key: string) => string;
+}) {
+  return (
+    <div className="model-selector">
+      <div className="model-selector-header">
+        <strong>{t("selectVisibleModels")}</strong>
+        <span>{`${modelRows.filter((row) => row.selected).length}/${modelRows.length}`}</span>
+      </div>
+      <div className="model-selector-list">
+        {modelRows.map((row, index) => (
+          <label className="model-selector-row" key={row.name}>
+            <input
+              checked={row.selected}
+              onChange={(event) => {
+                const next = [...modelRows];
+                next[index] = { ...row, selected: event.target.checked };
+                setModelRows(next);
+              }}
+              type="checkbox"
+            />
+            <code title={row.name}>{row.name}</code>
+            <Input
+              aria-label={`${t("alias")} ${row.name}`}
+              value={row.alias}
+              onChange={(event) => {
+                const next = [...modelRows];
+                next[index] = { ...row, alias: event.target.value };
+                setModelRows(next);
+              }}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function selectedModels(form: ChannelFormState, modelRows: ModelSelection[]): ModelEntry[] {
+  const models = modelRows
+    .filter((row) => row.selected)
+    .map((row) => ({ alias: row.alias.trim() || undefined, name: row.name.trim() }))
+    .filter((row) => row.name);
+
+  if (form.model.trim()) {
+    models.unshift({ alias: form.alias.trim() || undefined, name: form.model.trim() });
   }
-  return probed.slice(0, 20).map((name) => ({ name }));
+
+  return models;
+}
+
+function apiKeyEntriesForSave(editingChannel: OpenAIChannel | null, apiKey: string): OpenAIChannel["api-key-entries"] {
+  const entries = editingChannel?.["api-key-entries"] ? [...editingChannel["api-key-entries"]] : [];
+  const trimmed = apiKey.trim();
+  if (trimmed) {
+    if (entries.length > 0) {
+      entries[0] = { ...entries[0], "api-key": trimmed };
+    } else {
+      entries.push({ "api-key": trimmed });
+    }
+  }
+  return entries;
 }

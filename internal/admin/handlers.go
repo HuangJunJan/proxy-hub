@@ -89,8 +89,8 @@ func (h *Handler) setup(c *gin.Context) {
 		return
 	}
 	username := strings.TrimSpace(req.Username)
-	if username == "" || len(req.Password) < 8 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "username and password with at least 8 characters are required"})
+	if username == "" || len(req.Password) < 6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username and password with at least 6 characters are required"})
 		return
 	}
 	passwordHash, err := auth.HashPassword(req.Password)
@@ -352,6 +352,7 @@ func (h *Handler) listKeys(c *gin.Context) {
 		keys = append(keys, gin.H{
 			"name":      key.Name,
 			"notes":     key.Notes,
+			"token":     key.Token,
 			"tokenMask": auth.MaskToken(key.Token),
 			"disabled":  key.Disabled,
 		})
@@ -585,8 +586,15 @@ func oauthChannelIndex(channels []config.ChatGPTOAuthChannel, name string) int {
 func apiKeyIndex(keys []config.APIKeyConfig, id string) (int, error) {
 	var matches []int
 	for i, key := range keys {
-		if key.Name != "" && key.Name == id {
+		if key.Token == id {
 			matches = append(matches, i)
+		}
+	}
+	if len(matches) == 0 {
+		for i, key := range keys {
+			if key.Name != "" && key.Name == id {
+				matches = append(matches, i)
+			}
 		}
 	}
 	if len(matches) == 0 {

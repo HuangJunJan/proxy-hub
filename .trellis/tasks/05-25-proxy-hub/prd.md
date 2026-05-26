@@ -89,8 +89,8 @@
 
 - FR-5.1 控制台创建（生成 `sk-proxy-hub-...` 风格 token，写入 YAML 的 `api-keys[]`）。
 - FR-5.2 `api-keys[]` 每项：`token`（必填）、`name?`（可选别名，便于监控页区分）、`notes?`、`disabled?`。token 在 YAML 中明文存储。
-- FR-5.3 创建后 token 仅在创建那一刻返回前端明文一次；后续 GET API 仅返回 `name` / 掩码 token / 用量统计。
-- FR-5.4 支持禁用 / 删除 / 查看使用情况（请求数、Token 数、最近使用时间）。
+- FR-5.3 控制台管理员可在 API Keys 页面查看 / 复制完整 token；列表同时保留掩码 token 便于紧凑展示与日志关联。
+- FR-5.4 支持编辑名称/备注、启用/禁用、删除、复制 token、查看使用情况（请求数、Token 数、最近使用时间）。
 
 ### FR-6 统计 - 渠道维度（SQLite）
 

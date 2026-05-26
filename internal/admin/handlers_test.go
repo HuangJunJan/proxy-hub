@@ -29,7 +29,7 @@ func TestSetupWritesConfigAndIssuesSession(t *testing.T) {
 	r := gin.New()
 	handler.Register(r.Group("/api/admin"))
 
-	body := bytes.NewBufferString(`{"username":"admin","password":"hunter22"}`)
+	body := bytes.NewBufferString(`{"username":"admin","password":"123456"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/setup", body)
 	req.Header.Set("content-type", "application/json")
 	rec := httptest.NewRecorder()
@@ -135,8 +135,8 @@ func TestAdminChannelsAndKeys(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list keys status = %d body=%s", rec.Code, rec.Body.String())
 	}
-	if bytes.Contains(rec.Body.Bytes(), []byte(payload.Token)) {
-		t.Fatalf("list keys leaked token: %s", rec.Body.String())
+	if !bytes.Contains(rec.Body.Bytes(), []byte(payload.Token)) {
+		t.Fatalf("list keys should include token for admin copy action: %s", rec.Body.String())
 	}
 }
 

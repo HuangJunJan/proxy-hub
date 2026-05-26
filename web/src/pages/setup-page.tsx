@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ScreenCenter } from "../components/screen-center";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { CopyButton } from "../components/ui/copy-button";
 import { Dialog } from "../components/ui/dialog";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
@@ -42,7 +43,7 @@ export function SetupPage() {
             </Field>
             <Field label={t("setupPassword")}>
               <Input
-                minLength={8}
+                minLength={6}
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
@@ -57,7 +58,9 @@ export function SetupPage() {
       </Card>
       <Dialog open={Boolean(token)} title={t("setupToken")}>
         <div className="form-stack">
+          <p className="hint-text">{t("tokenUsageHint")}</p>
           <code className="token-box">{token}</code>
+          <CopyButton copiedLabel={t("copied")} label={t("copy")} value={token} />
           <Button
             onClick={() => {
               setAuthenticated(username);

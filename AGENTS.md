@@ -19,3 +19,9 @@ If you're using Codex or another agent-capable tool, additional project-scoped h
 Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
 
 <!-- TRELLIS:END -->
+
+## Local Process Policy
+
+Agents must not start project servers, dev servers, watchers, or long-running processes silently in the background.
+If a local server is needed, run it in a visible foreground session or clearly report the exact command, working directory, PID, port, and log files before continuing.
+Agents must stop any project process they start before handing off unless the user explicitly asks to keep it running.

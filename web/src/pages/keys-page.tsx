@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
+import { CopyButton } from "../components/ui/copy-button";
 import { DataTable } from "../components/ui/data-table";
 import { Dialog } from "../components/ui/dialog";
 import { Field } from "../components/ui/field";
@@ -17,8 +18,9 @@ import type { DownstreamKey } from "../lib/types";
 export function KeysPage() {
   const { t } = useAppContext();
   const [created, setCreated] = useState("");
+  const [editingKey, setEditingKey] = useState<DownstreamKey | null>(null);
   const [error, setError] = useState("");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [keys, setKeys] = useState<DownstreamKey[]>([]);
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -39,11 +41,43 @@ export function KeysPage() {
   async function create(event: FormEvent) {
     event.preventDefault();
     try {
-      const result = await api.createKey(name, notes);
-      setCreated(result.token);
-      setName("");
-      setNotes("");
-      setIsCreateOpen(false);
+      if (editingKey) {
+        await api.updateKey(keyIdentifier(editingKey), { name, notes });
+      } else {
+        const result = await api.createKey(name, notes);
+        setCreated(result.token);
+      }
+      resetForm();
+      await refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  function startCreate() {
+    setEditingKey(null);
+    setName("");
+    setNotes("");
+    setIsFormOpen(true);
+  }
+
+  function startEdit(key: DownstreamKey) {
+    setEditingKey(key);
+    setName(key.name || "");
+    setNotes(key.notes || "");
+    setIsFormOpen(true);
+  }
+
+  function resetForm() {
+    setEditingKey(null);
+    setName("");
+    setNotes("");
+    setIsFormOpen(false);
+  }
+
+  async function toggleKey(key: DownstreamKey) {
+    try {
+      await api.updateKey(keyIdentifier(key), { disabled: !key.disabled });
       await refresh();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -54,16 +88,23 @@ export function KeysPage() {
     <section className="stack">
       <Toolbar
         actions={
-          <Sheet onOpenChange={setIsCreateOpen} open={isCreateOpen}>
+          <Sheet
+            onOpenChange={(open) => {
+              if (!open) {
+                resetForm();
+              }
+            }}
+            open={isFormOpen}
+          >
             <SheetTrigger asChild>
-              <Button type="button">
+              <Button onClick={startCreate} type="button">
                 <Plus size={16} />
                 {t("createKey")}
               </Button>
             </SheetTrigger>
             <SheetContent>
               <SheetHeader>
-                <SheetTitle>{t("createKey")}</SheetTitle>
+                <SheetTitle>{editingKey ? t("editKey") : t("createKey")}</SheetTitle>
               </SheetHeader>
               <form className="form-stack" onSubmit={create}>
                 <Field label={t("keyName")}>
@@ -72,7 +113,7 @@ export function KeysPage() {
                 <Field label={t("notes")}>
                   <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
                 </Field>
-                <Button type="submit">{t("createKey")}</Button>
+                <Button type="submit">{editingKey ? t("save") : t("createKey")}</Button>
               </form>
             </SheetContent>
           </Sheet>
@@ -91,26 +132,33 @@ export function KeysPage() {
               key.name || "-",
               key.tokenMask,
               key.notes || "-",
-              key.disabled ? t("disabled") : t("enabled"),
-              <Button
-                key={key.tokenMask}
-                onClick={async () => {
-                  await api.updateKey(key.name || key.tokenMask, { disabled: !key.disabled });
-                  await refresh();
-                }}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {key.disabled ? t("enabled") : t("disabled")}
-              </Button>,
+              <span className={key.disabled ? "status-text danger" : "status-text success"}>
+                {key.disabled ? t("disabled") : t("enabled")}
+              </span>,
+              <div className="table-actions" key={key.tokenMask}>
+                <CopyButton copiedLabel={t("copied")} label={t("copy")} value={key.token || key.tokenMask} />
+                <Button onClick={() => startEdit(key)} size="sm" type="button" variant="outline">
+                  {t("edit")}
+                </Button>
+                <Button onClick={() => void toggleKey(key)} size="sm" type="button" variant="outline">
+                  {key.disabled ? t("enable") : t("disable")}
+                </Button>
+              </div>,
             ])}
           />
         </CardContent>
       </Card>
       <Dialog onClose={() => setCreated("")} open={Boolean(created)} title={t("token")}>
-        <code className="token-box">{created}</code>
+        <div className="form-stack">
+          <p className="hint-text">{t("tokenUsageHint")}</p>
+          <code className="token-box">{created}</code>
+          <CopyButton copiedLabel={t("copied")} label={t("copy")} value={created} />
+        </div>
       </Dialog>
     </section>
   );
+}
+
+function keyIdentifier(key: DownstreamKey) {
+  return key.token || key.name || key.tokenMask;
 }

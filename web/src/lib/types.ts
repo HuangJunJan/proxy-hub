@@ -44,9 +44,16 @@ export interface ChannelsResponse {
   "chatgpt-oauth": OAuthChannel[];
 }
 
+export interface ChannelHealthResult {
+  ok: boolean;
+  latencyMs?: number;
+  error?: string;
+}
+
 export interface DownstreamKey {
   name?: string;
   notes?: string;
+  token?: string;
   tokenMask: string;
   disabled?: boolean;
 }

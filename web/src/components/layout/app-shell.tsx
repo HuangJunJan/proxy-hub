@@ -1,4 +1,4 @@
-import { LogOut } from "lucide-react";
+import { Activity, LogOut } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAppContext } from "../../lib/app-context";
@@ -6,17 +6,22 @@ import { consoleRoutes, titleForPath } from "../../lib/navigation";
 import type { Language, ThemeMode } from "../../lib/types";
 import { Button } from "../ui/button";
 import { Select } from "../ui/select";
+import logoUrl from "../../assets/logo.png";
 
 export function AppShell() {
   const { language, setLanguage, setLoggedOut, setTheme, t, theme, username } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
+  const currentRoute = consoleRoutes.find((item) => item.path === location.pathname);
+  const CurrentIcon = currentRoute?.icon;
 
   return (
     <div className="layout">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">P</div>
+          <div className="brand-mark">
+            <img alt="" aria-hidden="true" className="brand-logo" src={logoUrl} />
+          </div>
           <div>
             <strong>{t("appName")}</strong>
             <span>{username}</span>
@@ -38,8 +43,22 @@ export function AppShell() {
       </aside>
       <main className="workspace">
         <header className="topbar">
-          <h1>{t(titleForPath(location.pathname))}</h1>
+          <div className="topbar-title">
+            {CurrentIcon && (
+              <span className="topbar-icon" aria-hidden="true">
+                <CurrentIcon size={18} />
+              </span>
+            )}
+            <div>
+              <h1>{t(titleForPath(location.pathname))}</h1>
+              <span>{username ? `${t("activeSession")} · ${username}` : t("activeSession")}</span>
+            </div>
+          </div>
           <div className="topbar-actions">
+            <div className="gateway-status">
+              <Activity size={16} />
+              <span>{t("gatewayReady")}</span>
+            </div>
             <Select value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
               <option value="zh">中文</option>
               <option value="en">English</option>

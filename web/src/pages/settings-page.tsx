@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { CopyButton } from "../components/ui/copy-button";
 import { Field } from "../components/ui/field";
 import { Select } from "../components/ui/select";
 import { useAppContext } from "../lib/app-context";
@@ -9,6 +10,7 @@ export function SettingsPage() {
 
   return (
     <section className="settings-grid">
+      <AccessPanel t={t} />
       <Card>
         <CardHeader>
           <CardTitle>{t("language")}</CardTitle>
@@ -38,4 +40,62 @@ export function SettingsPage() {
       </Card>
     </section>
   );
+}
+
+function AccessPanel({ t }: { t: (key: string) => string }) {
+  const baseUrl = `${gatewayOrigin()}/v1`;
+  const chatUrl = `${baseUrl}/chat/completions`;
+  const modelsUrl = `${baseUrl}/models`;
+  const curl = `curl ${chatUrl} -H "Authorization: Bearer <proxy-hub-api-key>" -H "Content-Type: application/json" -d "{\\"model\\":\\"<visible-model>\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"hi\\"}]}"`;
+
+  return (
+    <Card className="settings-wide-card">
+      <CardHeader>
+        <CardTitle>{t("externalAccess")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="endpoint-grid">
+          <CopyValue copiedLabel={t("copied")} label={t("openAIBaseUrl")} value={baseUrl} t={t} />
+          <CopyValue copiedLabel={t("copied")} label={t("chatCompletionsUrl")} value={chatUrl} t={t} />
+          <CopyValue copiedLabel={t("copied")} label={t("modelsUrl")} value={modelsUrl} t={t} />
+          <CopyValue copiedLabel={t("copied")} label={t("curlExample")} value={curl} t={t} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CopyValue({
+  copiedLabel,
+  label,
+  t,
+  value,
+}: {
+  copiedLabel: string;
+  label: string;
+  t: (key: string) => string;
+  value: string;
+}) {
+  return (
+    <div className="copy-value">
+      <span>{label}</span>
+      <code>{value}</code>
+      <CopyButton copiedLabel={copiedLabel} label={t("copy")} value={value} />
+    </div>
+  );
+}
+
+function gatewayOrigin() {
+  const configuredTarget = import.meta.env.VITE_PROXY_TARGET;
+  if (configuredTarget) {
+    return trimTrailingSlash(configuredTarget);
+  }
+  if (import.meta.env.DEV) {
+    return "http://localhost:8787";
+  }
+  return window.location.origin;
+}
+
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
 }
