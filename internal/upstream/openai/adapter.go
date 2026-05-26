@@ -126,7 +126,11 @@ func joinBaseURL(baseURL, path string) string {
 	if err != nil {
 		return strings.TrimRight(baseURL, "/") + path
 	}
-	parsed.Path = strings.TrimRight(parsed.Path, "/") + path
+	basePath := strings.TrimRight(parsed.Path, "/")
+	if strings.HasPrefix(path, "/v1/") && strings.HasSuffix(basePath, "/v1") {
+		path = strings.TrimPrefix(path, "/v1")
+	}
+	parsed.Path = basePath + path
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed.String()
@@ -135,7 +139,7 @@ func joinBaseURL(baseURL, path string) string {
 func copyHeaders(dst, src http.Header) {
 	for key, values := range src {
 		switch strings.ToLower(key) {
-		case "authorization", "host", "content-length":
+		case "authorization", "host", "content-length", "accept-encoding", "connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade":
 			continue
 		}
 		for _, value := range values {

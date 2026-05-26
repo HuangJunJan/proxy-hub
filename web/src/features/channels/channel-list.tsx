@@ -11,11 +11,13 @@ export function ChannelList({
   title,
   t,
 }: {
-  items: ChannelListItem[];
+  items: ChannelListItem[] | null | undefined;
   onDelete: (name: string) => Promise<void>;
   title: string;
   t: (key: string) => string;
 }) {
+  const safeItems = items ?? [];
+
   return (
     <Card>
       <CardHeader>
@@ -25,7 +27,7 @@ export function ChannelList({
         <DataTable
           empty={t("empty")}
           headers={[t("channelName"), t("status"), t("model"), ""]}
-          rows={items.map((item) => [
+          rows={safeItems.map((item) => [
             item.name,
             item.disabled ? t("disabled") : t("enabled"),
             modelLabels(item.models),
@@ -39,6 +41,6 @@ export function ChannelList({
   );
 }
 
-function modelLabels(models: ModelEntry[]) {
-  return models.map((model) => model.alias || model.name).join(", ");
+function modelLabels(models: ModelEntry[] | null | undefined) {
+  return (models ?? []).map((model) => model.alias || model.name).join(", ");
 }

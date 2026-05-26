@@ -86,6 +86,25 @@ func TestChatStreamAcceptHeader(t *testing.T) {
 	}
 }
 
+func TestCopyHeadersSkipsHopByHopOrEncodingHeaders(t *testing.T) {
+	dst := http.Header{}
+	copyHeaders(dst, http.Header{
+		"Accept-Encoding":    []string{"br"},
+		"Connection":         []string{"keep-alive"},
+		"Transfer-Encoding":  []string{"chunked"},
+		"X-Downstream-Trace": []string{"trace-id"},
+	})
+
+	for _, name := range []string{"Accept-Encoding", "Connection", "Transfer-Encoding"} {
+		if got := dst.Get(name); got != "" {
+			t.Fatalf("%s = %q, want empty", name, got)
+		}
+	}
+	if got := dst.Get("X-Downstream-Trace"); got != "trace-id" {
+		t.Fatalf("X-Downstream-Trace = %q, want trace-id", got)
+	}
+}
+
 func TestModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" {
@@ -107,6 +126,13 @@ func TestModels(t *testing.T) {
 	}
 	if len(models) != 2 || models[0] != "gpt-4o" || models[1] != "gpt-4o-mini" {
 		t.Fatalf("Models() = %#v", models)
+	}
+}
+
+func TestJoinBaseURLDoesNotDuplicateVersionPath(t *testing.T) {
+	got := joinBaseURL("https://example.test/v1", "/v1/models")
+	if got != "https://example.test/v1/models" {
+		t.Fatalf("joinBaseURL() = %q, want version path once", got)
 	}
 }
 

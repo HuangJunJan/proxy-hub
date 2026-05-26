@@ -160,14 +160,27 @@ func (s *Service) Stream(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Status(http.StatusOK)
 	flusher, _ := c.Writer.(http.Flusher)
+	if _, err := c.Writer.Write([]byte(": connected\n\n")); err != nil {
+		return
+	}
 	if flusher != nil {
 		flusher.Flush()
 	}
+
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
 
 	for {
 		select {
 		case <-c.Request.Context().Done():
 			return
+		case <-heartbeat.C:
+			if _, err := c.Writer.Write([]byte(": heartbeat\n\n")); err != nil {
+				return
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
 		case entry := <-ch:
 			data, err := json.Marshal(entry)
 			if err != nil {

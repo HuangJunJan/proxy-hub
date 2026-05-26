@@ -247,6 +247,30 @@ func TestAdminEmptyLogsAndStatsReturnArrays(t *testing.T) {
 	}
 }
 
+func TestAdminEmptyChannelsReturnArrays(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	manager := readyConfigManager(t)
+	sessions := auth.NewSessionManagerWithSecret([]byte("01234567890123456789012345678901"))
+	handler := NewHandler(manager, sessions)
+
+	r := gin.New()
+	handler.Register(r.Group("/api/admin"))
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/channels", nil)
+	req.AddCookie(sessionCookie(t, sessions))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("channels status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"openai-api":[]`)) {
+		t.Fatalf("empty openai channels response = %s, want []", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"chatgpt-oauth":[]`)) {
+		t.Fatalf("empty oauth channels response = %s, want []", rec.Body.String())
+	}
+}
+
 func readyConfigManager(t *testing.T) *config.Manager {
 	t.Helper()
 	manager := config.NewManager(filepath.Join(t.TempDir(), "config.yaml"), nil)

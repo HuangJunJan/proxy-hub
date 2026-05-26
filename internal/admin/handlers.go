@@ -167,8 +167,8 @@ func (h *Handler) me(c *gin.Context) {
 func (h *Handler) listChannels(c *gin.Context) {
 	cfg := h.config.Snapshot()
 	c.JSON(http.StatusOK, gin.H{
-		config.ChannelTypeOpenAIAPI:    cfg.OpenAIAPI,
-		config.ChannelTypeChatGPTOAuth: cfg.ChatGPTOAuth,
+		config.ChannelTypeOpenAIAPI:    openAIChannelsOrEmpty(cfg.OpenAIAPI),
+		config.ChannelTypeChatGPTOAuth: oauthChannelsOrEmpty(cfg.ChatGPTOAuth),
 	})
 }
 
@@ -557,6 +557,20 @@ func openAIChannelIndex(channels []config.OpenAIAPIChannel, name string) int {
 		}
 	}
 	return -1
+}
+
+func openAIChannelsOrEmpty(channels []config.OpenAIAPIChannel) []config.OpenAIAPIChannel {
+	if channels == nil {
+		return []config.OpenAIAPIChannel{}
+	}
+	return channels
+}
+
+func oauthChannelsOrEmpty(channels []config.ChatGPTOAuthChannel) []config.ChatGPTOAuthChannel {
+	if channels == nil {
+		return []config.ChatGPTOAuthChannel{}
+	}
+	return channels
 }
 
 func oauthChannelIndex(channels []config.ChatGPTOAuthChannel, name string) int {
