@@ -14,6 +14,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const currentRoute = consoleRoutes.find((item) => item.path === location.pathname);
   const CurrentIcon = currentRoute?.icon;
+  const routeTitle = t(titleForPath(location.pathname));
 
   return (
     <div className="layout">
@@ -50,8 +51,8 @@ export function AppShell() {
               </span>
             )}
             <div>
-              <h1>{t("console")}</h1>
-              <span>{username ? `${t(titleForPath(location.pathname))} · ${username}` : t(titleForPath(location.pathname))}</span>
+              <h1>{routeTitle}</h1>
+              <span className="topbar-subtitle">{username ? `${t("appName")} · ${username}` : t("appName")}</span>
             </div>
           </div>
           <div className="topbar-actions">

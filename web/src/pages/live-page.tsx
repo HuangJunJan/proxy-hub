@@ -25,8 +25,8 @@ export function LivePage() {
 
   return (
     <section className="stack">
-      <div className="toolbar">
-        <h2>{t("live")}</h2>
+      <div className="toolbar toolbar-actions-only">
+        <h2 className="toolbar-title">{t("live")}</h2>
         <div className="toolbar-actions">
           <div className="segmented-control" aria-label={t("filters")}>
             <Button onClick={() => setFilter("all")} type="button" variant={filter === "all" ? "default" : "ghost"}>

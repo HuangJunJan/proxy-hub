@@ -14,8 +14,8 @@ export function Toolbar({
   title: string;
 }) {
   return (
-    <div className="toolbar">
-      <h2>{title}</h2>
+    <div className="toolbar toolbar-actions-only">
+      <h2 className="toolbar-title">{title}</h2>
       <div className="toolbar-actions">
         {actions}
         <Button onClick={onRefresh} type="button" variant="outline">

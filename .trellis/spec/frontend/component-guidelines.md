@@ -55,6 +55,9 @@ Current examples:
 - UI primitives use stable shared classes such as `ui-button`, `ui-card`, `ui-sheet-content`, and `ui-table`.
 - Keep dimensions stable for repeated controls and tables; mobile tables should scroll horizontally instead of overlapping content.
 - Use lucide icons inside buttons when an icon exists.
+- Visual style should stay flat, restrained, and operational: use thin borders, neutral surfaces, compact typography, and low-saturation semantic colors.
+- Avoid decorative gradients, heavy shadows, glass effects, layout-shifting hover transforms, and marketing-style card sections in the console.
+- App-level page titles belong in `AppShell`; route toolbars should prioritize actions and avoid visually duplicating the same heading.
 
 ---
 
