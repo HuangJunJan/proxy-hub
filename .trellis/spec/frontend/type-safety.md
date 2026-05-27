@@ -62,6 +62,57 @@ const channel: OpenAIChannel = {
 
 Shared cross-page response types also belong in `web/src/lib/types.ts`; page-local UI state can stay local.
 
+### Scenario: Admin Request Log DTOs
+
+#### 1. Scope / Trigger
+- Trigger: history and live-monitor pages consume persisted request logs and admin log search results.
+
+#### 2. Signatures
+- `GET /api/admin/logs?channel&apiKey&model&endpoint&requestType&statusClass&status&errorKind&from&to&limit&page`
+- `RequestLog`
+- `LogsResponse`
+
+#### 3. Contracts
+- Query fields are URL query strings; `from` and `to` are Unix milliseconds.
+- `statusClass` is optional and uses `"success"` or `"error"`.
+- `RequestLog` token fields are optional: `promptTokens`, `completionTokens`, `reasoningTokens`, and `totalTokens`.
+- The history table displays token usage as input/output/reasoning/total.
+- Cost estimation is not part of `RequestLog`; do not add cost columns without a backend pricing contract.
+
+#### 4. Validation & Error Matrix
+- Missing optional fields -> render `-`.
+- Invalid date input -> omit the time parameter.
+- Backend query failure -> page keeps its filter state and displays the backend error.
+
+#### 5. Good/Base/Bad Cases
+- Good: log filters build `URLSearchParams` and use `api.logs(params)`.
+- Base: page-local filter state may be camelCase because it is not a backend DTO, but it must map once to query parameter names.
+- Bad: table derives fake cost from token counts.
+
+#### 6. Tests Required
+- `pnpm build` must type-check `RequestLog` consumers.
+- Store/admin backend tests must assert the query fields map to repository filters.
+- Future UI tests should assert token labels render input/output/reasoning/total.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```tsx
+<DataTable headers={[t("token"), t("cost")]} rows={logs.map((log) => [log.totalTokens, "-"])} />
+```
+
+Correct:
+
+```tsx
+<TokenCell
+  promptTokens={log.promptTokens}
+  completionTokens={log.completionTokens}
+  reasoningTokens={log.reasoningTokens}
+  totalTokens={log.totalTokens}
+/>
+```
+
 ### Scenario: Admin Console Online Chat DTOs
 
 #### 1. Scope / Trigger

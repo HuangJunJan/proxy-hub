@@ -78,6 +78,7 @@ export interface RequestLog {
   billingMode?: string;
   promptTokens?: number;
   completionTokens?: number;
+  reasoningTokens?: number;
   totalTokens?: number;
   errorKind?: string;
   errorMessage?: string;

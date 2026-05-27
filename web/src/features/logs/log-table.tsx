@@ -13,9 +13,7 @@ export function LogTable({ logs, t }: { logs: RequestLog[]; t: (key: string) => 
         t("reasoningEffort"),
         t("endpoint"),
         t("requestType"),
-        t("billingMode"),
         t("token"),
-        t("cost"),
         t("firstToken"),
         t("duration"),
         t("time"),
@@ -37,9 +35,7 @@ export function LogTable({ logs, t }: { logs: RequestLog[]; t: (key: string) => 
           <Badge variant={statusVariant(log.statusCode)}>{log.statusCode}</Badge>
           {log.attempts > 1 && <span className="log-attempts">x{log.attempts}</span>}
         </div>,
-        <ValueCell key={`${log.id}-billing`} value={formatBillingMode(log.billingMode, t)} />,
-        <TokenCell key={`${log.id}-tokens`} log={log} />,
-        <ValueCell key={`${log.id}-cost`} value="-" muted />,
+        <TokenCell key={`${log.id}-tokens`} log={log} t={t} />,
         <ValueCell key={`${log.id}-first-token`} value={formatMS(log.firstTokenMs)} />,
         <ValueCell key={`${log.id}-duration`} value={formatMS(log.durationMs)} />,
         <StackCell key={`${log.id}-time`} primary={formatDate(log.ts)} secondary={formatTime(log.ts)} />,
@@ -72,16 +68,6 @@ function formatRequestType(log: RequestLog) {
     return log.requestType;
   }
   return log.isStream ? "stream" : "sync";
-}
-
-function formatBillingMode(value: string | undefined, t: (key: string) => string) {
-  if (!value) {
-    return "-";
-  }
-  if (value === "token") {
-    return t("tokenBilling");
-  }
-  return value;
 }
 
 function formatMS(value: number | undefined) {
@@ -119,16 +105,25 @@ function ValueCell({ muted, value }: { muted?: boolean; value: string }) {
   return <span className={muted ? "muted-text" : undefined}>{value}</span>;
 }
 
-function TokenCell({ log }: { log: RequestLog }) {
-  const hasBreakdown = log.promptTokens !== undefined || log.completionTokens !== undefined;
+function TokenCell({ log, t }: { log: RequestLog; t: (key: string) => string }) {
+  const rows = [
+    [t("inputToken"), log.promptTokens],
+    [t("outputToken"), log.completionTokens],
+    [t("reasoningToken"), log.reasoningTokens],
+    [t("totalToken"), log.totalTokens],
+  ] as const;
   return (
-    <span className="table-cell-stack log-token-cell">
-      <strong>{log.totalTokens?.toLocaleString() ?? "-"}</strong>
-      {hasBreakdown && (
-        <span>
-          {log.promptTokens?.toLocaleString() ?? "-"} / {log.completionTokens?.toLocaleString() ?? "-"}
+    <span className="log-token-cell">
+      {rows.map(([label, value]) => (
+        <span className="log-token-row" key={label}>
+          <span>{label}</span>
+          <strong>{formatToken(value)}</strong>
         </span>
-      )}
+      ))}
     </span>
   );
+}
+
+function formatToken(value: number | undefined) {
+  return value === undefined || value === null ? "-" : value.toLocaleString();
 }

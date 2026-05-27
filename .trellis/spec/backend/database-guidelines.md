@@ -31,11 +31,22 @@ The implementation uses `database/sql` with the pure-Go `modernc.org/sqlite` dri
 - `request_logs.ts` and `channel_stats_hourly.hour_ts` are Unix milliseconds.
 - Request logs store masked downstream key tokens only.
 - `channel_name` is historical text; channel rename creates new future records.
+- `store.QueryFilter` is the admin request-log search contract. Supported fields are:
+  - `ChannelName` exact-matches `request_logs.channel_name`.
+  - `APIKey` searches `api_key_name` and `api_key_token_mask` with `LIKE`.
+  - `Model` searches `downstream_model` and `upstream_model` with `LIKE`.
+  - `Endpoint` searches `endpoint` with `LIKE`.
+  - `RequestType` exact-matches `request_type`.
+  - `ErrorKind` searches `error_kind` with `LIKE`.
+  - `StatusCode` exact-matches `status_code`.
+  - `StatusClass` accepts `success` (`200 <= status < 400`) or `error` (`status >= 400`).
+  - `StartMS` and `EndMS` bound `ts` inclusively.
 - Request log context columns are persisted as nullable historical facts:
   - `endpoint` -> public endpoint path such as `/v1/chat/completions` or `/v1/responses`.
   - `request_type` -> logical endpoint family, currently `chat.completions` or `responses`.
   - `reasoning_effort` -> request `reasoning_effort`, or `reasoning.effort` when using the Responses-style nested object.
   - `billing_mode` -> `token` when usage is token-metered; do not invent pricing/cost values in storage.
+  - `prompt_tokens`, `completion_tokens`, `reasoning_tokens`, `total_tokens` -> nullable usage facts parsed from upstream response usage. `reasoning_tokens` may come from top-level `usage.reasoning_tokens`, `usage.output_tokens_details.reasoning_tokens`, or `usage.completion_tokens_details.reasoning_tokens`.
   - `first_token_ms` -> milliseconds from proxy request start to the first upstream response byte; nullable when no upstream bytes are read.
   - `user_agent` -> downstream request user agent.
 - `channel_stats_hourly.avg_duration_ms` is a weighted average by request count.
@@ -43,6 +54,7 @@ The implementation uses `database/sql` with the pure-Go `modernc.org/sqlite` dri
 #### 4. Validation & Error Matrix
 - Empty insert batch -> no-op.
 - Query limit <= 0 or > 500 -> coerced to 100.
+- `StatusClass` values other than `success` or `error` -> ignored by repository filtering.
 - Unsupported stats metric -> error before SQL interpolation.
 - Retention days <= 0 -> cleanup no-op.
 - Missing optional request context fields -> persisted/query-returned as empty string or nil, not synthetic placeholders.
@@ -50,14 +62,15 @@ The implementation uses `database/sql` with the pure-Go `modernc.org/sqlite` dri
 #### 5. Good/Base/Bad Cases
 - Good: proxy submits asynchronously; monitor batches writes and upserts stats.
 - Base: admin logs endpoint reads through repository interfaces.
-- Base: frontend displays unavailable cost as `-`; cost estimation is not part of the request log contract.
+- Base: frontend displays token usage as input/output/reasoning/total and omits cost columns because cost estimation is not part of the request log contract.
 - Bad: proxy writes SQLite synchronously on the request path.
 - Bad: UI calculates or displays fake monetary cost without persisted pricing data.
 
 #### 6. Tests Required
 - Migration idempotency/open store test.
 - Batch insert + filtered query test.
-- Request log context round-trip test for `endpoint`, `request_type`, `reasoning_effort`, `billing_mode`, `first_token_ms`, and `user_agent`.
+- Request log context round-trip test for `endpoint`, `request_type`, `reasoning_effort`, `billing_mode`, `first_token_ms`, `user_agent`, and `reasoning_tokens`.
+- Filtered query test for API key, model, endpoint, request type, status class, and error kind.
 - `DeleteBefore` retention test.
 - Hourly upsert weighted average test.
 - Proxy/server integration test asserting logs and stats reflect a request.

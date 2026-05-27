@@ -14,6 +14,9 @@ func TestRequestLogRepository(t *testing.T) {
 	keyIndex := 1
 	firstTokenMS := int64(37)
 	promptTokens := int64(12)
+	completionTokens := int64(8)
+	reasoningTokens := int64(4)
+	totalTokens := int64(24)
 	err := store.BatchInsert(ctx, []LogEntry{
 		{
 			TimestampMS:      1000,
@@ -33,6 +36,9 @@ func TestRequestLogRepository(t *testing.T) {
 			ReasoningEffort:  "high",
 			BillingMode:      "token",
 			PromptTokens:     &promptTokens,
+			CompletionTokens: &completionTokens,
+			ReasoningTokens:  &reasoningTokens,
+			TotalTokens:      &totalTokens,
 			Attempts:         1,
 			UserAgent:        "proxy-hub-test-agent",
 		},
@@ -74,6 +80,24 @@ func TestRequestLogRepository(t *testing.T) {
 	}
 	if first.FirstTokenMS == nil || *first.FirstTokenMS != 37 {
 		t.Fatalf("FirstTokenMS = %v, want 37", first.FirstTokenMS)
+	}
+	if first.ReasoningTokens == nil || *first.ReasoningTokens != 4 {
+		t.Fatalf("ReasoningTokens = %v, want 4", first.ReasoningTokens)
+	}
+
+	filtered, err := store.Query(ctx, QueryFilter{APIKey: "local", Model: "gpt-4o", Endpoint: "chat", RequestType: "chat.completions", StatusClass: "success"})
+	if err != nil {
+		t.Fatalf("Query(filtered) error = %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].ChannelName != "openai" {
+		t.Fatalf("Query(filtered) = %+v, want openai log", filtered)
+	}
+	filtered, err = store.Query(ctx, QueryFilter{ErrorKind: "upstream", StatusClass: "error"})
+	if err != nil {
+		t.Fatalf("Query(error filtered) error = %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].ChannelName != "deepseek" {
+		t.Fatalf("Query(error filtered) = %+v, want deepseek log", filtered)
 	}
 
 	deleted, err := store.DeleteBefore(ctx, 1500)

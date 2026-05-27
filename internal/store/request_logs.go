@@ -21,9 +21,9 @@ func (s *SQLiteStore) BatchInsert(ctx context.Context, entries []LogEntry) error
 			channel_name, channel_type,
 			downstream_model, upstream_model, upstream_key_index, status_code,
 			is_stream, duration_ms, first_token_ms, reasoning_effort, billing_mode,
-			prompt_tokens, completion_tokens, total_tokens, error_kind, error_message,
+			prompt_tokens, completion_tokens, reasoning_tokens, total_tokens, error_kind, error_message,
 			request_body, response_body, attempts, user_agent
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		_ = tx.Rollback()
@@ -55,6 +55,7 @@ func (s *SQLiteStore) BatchInsert(ctx context.Context, entries []LogEntry) error
 			nullString(entry.BillingMode),
 			nullInt64(entry.PromptTokens),
 			nullInt64(entry.CompletionTokens),
+			nullInt64(entry.ReasoningTokens),
 			nullInt64(entry.TotalTokens),
 			nullString(entry.ErrorKind),
 			nullString(entry.ErrorMessage),
@@ -88,7 +89,7 @@ func (s *SQLiteStore) Query(ctx context.Context, filter QueryFilter) ([]LogEntry
 			channel_name, channel_type,
 			downstream_model, upstream_model, upstream_key_index, status_code,
 			is_stream, duration_ms, first_token_ms, reasoning_effort, billing_mode,
-			prompt_tokens, completion_tokens, total_tokens, error_kind, error_message,
+			prompt_tokens, completion_tokens, reasoning_tokens, total_tokens, error_kind, error_message,
 			request_body, response_body, attempts, user_agent
 		FROM request_logs
 		WHERE 1 = 1
@@ -98,9 +99,37 @@ func (s *SQLiteStore) Query(ctx context.Context, filter QueryFilter) ([]LogEntry
 		query.WriteString(" AND channel_name = ?")
 		args = append(args, filter.ChannelName)
 	}
+	if filter.APIKey != "" {
+		query.WriteString(" AND (api_key_name LIKE ? OR api_key_token_mask LIKE ?)")
+		value := "%" + filter.APIKey + "%"
+		args = append(args, value, value)
+	}
+	if filter.Model != "" {
+		query.WriteString(" AND (downstream_model LIKE ? OR upstream_model LIKE ?)")
+		value := "%" + filter.Model + "%"
+		args = append(args, value, value)
+	}
+	if filter.Endpoint != "" {
+		query.WriteString(" AND endpoint LIKE ?")
+		args = append(args, "%"+filter.Endpoint+"%")
+	}
+	if filter.RequestType != "" {
+		query.WriteString(" AND request_type = ?")
+		args = append(args, filter.RequestType)
+	}
+	if filter.ErrorKind != "" {
+		query.WriteString(" AND error_kind LIKE ?")
+		args = append(args, "%"+filter.ErrorKind+"%")
+	}
 	if filter.StatusCode != 0 {
 		query.WriteString(" AND status_code = ?")
 		args = append(args, filter.StatusCode)
+	}
+	switch filter.StatusClass {
+	case "success":
+		query.WriteString(" AND status_code >= 200 AND status_code < 400")
+	case "error":
+		query.WriteString(" AND status_code >= 400")
 	}
 	if filter.StartMS != 0 {
 		query.WriteString(" AND ts >= ?")
@@ -154,7 +183,7 @@ func scanLogEntry(row rowScanner) (LogEntry, error) {
 	var apiKeyName, endpoint, requestType, channelName, channelType, upstreamModel sql.NullString
 	var upstreamKeyIndex sql.NullInt64
 	var isStream int
-	var firstTokenMS, promptTokens, completionTokens, totalTokens sql.NullInt64
+	var firstTokenMS, promptTokens, completionTokens, reasoningTokens, totalTokens sql.NullInt64
 	var reasoningEffort, billingMode, errorKind, errorMessage, userAgent sql.NullString
 	var requestBody, responseBody []byte
 	if err := row.Scan(
@@ -177,6 +206,7 @@ func scanLogEntry(row rowScanner) (LogEntry, error) {
 		&billingMode,
 		&promptTokens,
 		&completionTokens,
+		&reasoningTokens,
 		&totalTokens,
 		&errorKind,
 		&errorMessage,
@@ -211,6 +241,10 @@ func scanLogEntry(row rowScanner) (LogEntry, error) {
 	if completionTokens.Valid {
 		value := completionTokens.Int64
 		entry.CompletionTokens = &value
+	}
+	if reasoningTokens.Valid {
+		value := reasoningTokens.Int64
+		entry.ReasoningTokens = &value
 	}
 	if totalTokens.Valid {
 		value := totalTokens.Int64

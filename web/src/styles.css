@@ -250,13 +250,15 @@ nav {
 .topbar {
   width: 100%;
   justify-content: space-between;
-  min-height: 64px;
+  min-height: 58px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--panel-soft);
-  box-shadow: var(--shadow-soft);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 46%),
+    color-mix(in srgb, var(--panel) 90%, transparent);
+  box-shadow: 0 8px 26px rgb(21 32 50 / 8%);
   backdrop-filter: blur(16px);
-  padding: 10px 12px 10px 16px;
+  padding: 10px 12px;
 }
 
 .topbar-title {
@@ -269,7 +271,7 @@ nav {
 .topbar-title span {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .topbar-icon,
@@ -290,7 +292,7 @@ nav {
 
 .topbar h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 18px;
   letter-spacing: 0;
 }
 
@@ -299,6 +301,16 @@ nav {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.topbar-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.topbar-actions .ui-button,
+.topbar-actions .ui-select {
+  white-space: nowrap;
 }
 
 .gateway-status {
@@ -701,8 +713,46 @@ nav {
   border-bottom: 0;
 }
 
+.log-filter-card .ui-card-content {
+  display: grid;
+  gap: 16px;
+}
+
+.log-filter-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.log-filter-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.log-filter-heading span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.log-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.log-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .request-log-table {
-  min-width: 1720px;
+  min-width: 1480px;
 }
 
 .request-log-table th,
@@ -723,7 +773,33 @@ nav {
 }
 
 .log-token-cell {
-  min-width: 92px;
+  min-width: 150px;
+  display: grid;
+  gap: 5px;
+}
+
+.log-token-row {
+  display: grid;
+  grid-template-columns: minmax(52px, 1fr) minmax(64px, auto);
+  align-items: baseline;
+  gap: 10px;
+}
+
+.log-token-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.log-token-row strong {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.log-token-row:last-child {
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  margin-top: 2px;
+  padding-top: 5px;
 }
 
 .log-type-cell {
@@ -1114,6 +1190,7 @@ nav {
   .live-summary,
   .split-view,
   .chat-layout,
+  .log-filter-grid,
   .settings-grid {
     grid-template-columns: 1fr;
   }
@@ -1142,9 +1219,14 @@ nav {
   }
 
   .copy-value,
-  .model-selector-row {
+  .model-selector-row,
+  .log-filter-actions {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .log-filter-actions {
+    flex-direction: column;
   }
 
   .model-chip-list {

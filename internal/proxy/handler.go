@@ -198,7 +198,7 @@ func (h *Handler) modelRequest(c *gin.Context, endpoint modelProxyEndpoint) {
 			return
 		}
 		logInput.firstTokenMS = firstTokenMS
-		logInput.promptTokens, logInput.completionTokens, logInput.totalTokens = parseUsage(responseBody)
+		logInput.promptTokens, logInput.completionTokens, logInput.reasoningTokens, logInput.totalTokens = parseUsage(responseBody)
 		logInput.responseBody = h.logResponseBody(cfg, responseBody, false)
 		h.writeBuffered(c, resp, responseBody)
 		h.submitLog(c, logInput)
@@ -349,6 +349,7 @@ type requestLogInput struct {
 	billingMode      string
 	promptTokens     *int64
 	completionTokens *int64
+	reasoningTokens  *int64
 	totalTokens      *int64
 	errorKind        string
 	errorMessage     string
@@ -386,6 +387,7 @@ func (h *Handler) submitLog(c *gin.Context, input requestLogInput) {
 		BillingMode:      input.billingMode,
 		PromptTokens:     input.promptTokens,
 		CompletionTokens: input.completionTokens,
+		ReasoningTokens:  input.reasoningTokens,
 		TotalTokens:      input.totalTokens,
 		ErrorKind:        input.errorKind,
 		ErrorMessage:     input.errorMessage,
@@ -434,18 +436,25 @@ func (r *firstByteReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func parseUsage(body []byte) (*int64, *int64, *int64) {
+func parseUsage(body []byte) (*int64, *int64, *int64, *int64) {
 	var payload struct {
 		Usage struct {
-			PromptTokens     *int64 `json:"prompt_tokens"`
-			CompletionTokens *int64 `json:"completion_tokens"`
-			InputTokens      *int64 `json:"input_tokens"`
-			OutputTokens     *int64 `json:"output_tokens"`
-			TotalTokens      *int64 `json:"total_tokens"`
+			PromptTokens        *int64 `json:"prompt_tokens"`
+			CompletionTokens    *int64 `json:"completion_tokens"`
+			InputTokens         *int64 `json:"input_tokens"`
+			OutputTokens        *int64 `json:"output_tokens"`
+			ReasoningTokens     *int64 `json:"reasoning_tokens"`
+			OutputTokensDetails struct {
+				ReasoningTokens *int64 `json:"reasoning_tokens"`
+			} `json:"output_tokens_details"`
+			CompletionTokensDetails struct {
+				ReasoningTokens *int64 `json:"reasoning_tokens"`
+			} `json:"completion_tokens_details"`
+			TotalTokens *int64 `json:"total_tokens"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	promptTokens := payload.Usage.PromptTokens
 	if promptTokens == nil {
@@ -455,7 +464,14 @@ func parseUsage(body []byte) (*int64, *int64, *int64) {
 	if completionTokens == nil {
 		completionTokens = payload.Usage.OutputTokens
 	}
-	return promptTokens, completionTokens, payload.Usage.TotalTokens
+	reasoningTokens := payload.Usage.ReasoningTokens
+	if reasoningTokens == nil {
+		reasoningTokens = payload.Usage.OutputTokensDetails.ReasoningTokens
+	}
+	if reasoningTokens == nil {
+		reasoningTokens = payload.Usage.CompletionTokensDetails.ReasoningTokens
+	}
+	return promptTokens, completionTokens, reasoningTokens, payload.Usage.TotalTokens
 }
 
 func (h *Handler) logRequestBody(cfg *config.Config, body []byte, failed bool) []byte {

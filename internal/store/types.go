@@ -34,6 +34,7 @@ type LogEntry struct {
 	BillingMode      string `json:"billingMode,omitempty"`
 	PromptTokens     *int64 `json:"promptTokens,omitempty"`
 	CompletionTokens *int64 `json:"completionTokens,omitempty"`
+	ReasoningTokens  *int64 `json:"reasoningTokens,omitempty"`
 	TotalTokens      *int64 `json:"totalTokens,omitempty"`
 	ErrorKind        string `json:"errorKind,omitempty"`
 	ErrorMessage     string `json:"errorMessage,omitempty"`
@@ -45,6 +46,12 @@ type LogEntry struct {
 
 type QueryFilter struct {
 	ChannelName string
+	APIKey      string
+	Model       string
+	Endpoint    string
+	RequestType string
+	ErrorKind   string
+	StatusClass string
 	StatusCode  int
 	StartMS     int64
 	EndMS       int64
