@@ -1,6 +1,8 @@
-import { Plus } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { KeyRound, Plus, Route, ShieldCheck } from "lucide-react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "../components/ui/sheet";
@@ -28,6 +30,7 @@ export function ChannelsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [modelRows, setModelRows] = useState<ModelSelection[]>([]);
   const [error, setError] = useState("");
+  const summary = useMemo(() => channelSummary(channels), [channels]);
 
   async function refresh() {
     try {
@@ -158,12 +161,13 @@ export function ChannelsPage() {
             <SheetTrigger asChild>
               <Button onClick={startCreate} type="button">
                 <Plus size={16} />
-                {t("createChannel")}
+                {t("createOpenAIChannel")}
               </Button>
             </SheetTrigger>
-            <SheetContent>
+            <SheetContent className="channel-sheet">
               <SheetHeader>
                 <SheetTitle>{editingChannel ? t("editChannel") : t("createChannel")}</SheetTitle>
+                <p>{t("channelFormHint")}</p>
               </SheetHeader>
               <ChannelCreateForm
                 form={form}
@@ -182,6 +186,12 @@ export function ChannelsPage() {
         title={t("channels")}
       />
       {error && <Toast variant="destructive">{error}</Toast>}
+      <div className="channel-summary-grid">
+        <SummaryTile icon={<Route size={16} />} label={t("totalChannels")} value={summary.total} />
+        <SummaryTile icon={<ShieldCheck size={16} />} label={t("enabled")} tone="success" value={summary.enabled} />
+        <SummaryTile icon={<KeyRound size={16} />} label={t("credentials")} value={summary.credentials} />
+        <SummaryTile icon={<Route size={16} />} label={t("visibleModels")} value={summary.models} />
+      </div>
       <Tabs
         onValueChange={(value) => {
           if (value === "openai-api" || value === "chatgpt-oauth") {
@@ -191,8 +201,14 @@ export function ChannelsPage() {
         value={activeType}
       >
         <TabsList>
-          <TabsTrigger value="openai-api">{t("openAIChannels")}</TabsTrigger>
-          <TabsTrigger value="chatgpt-oauth">{t("oauthChannels")}</TabsTrigger>
+          <TabsTrigger value="openai-api">
+            <span>{t("openAIChannels")}</span>
+            <Badge variant="muted">{channels["openai-api"].length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="chatgpt-oauth">
+            <span>{t("oauthChannels")}</span>
+            <Badge variant="muted">{channels["chatgpt-oauth"].length}</Badge>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="openai-api">
           <ChannelList
@@ -246,38 +262,75 @@ function ChannelCreateForm({
   t: (key: string) => string;
 }) {
   return (
-    <form className="form-stack" onSubmit={onSubmit}>
-      <Field label={t("channelName")}>
-        <Input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-      </Field>
-      <Field label={t("baseUrl")}>
-        <Input required value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} />
-      </Field>
-      <Field label={t("apiKey")}>
-        <Input
-          required
-          type="password"
-          value={form.apiKey}
-          onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
-        />
-      </Field>
-      <Field label={t("priority")}>
-        <Input type="number" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })} />
-      </Field>
-      <div className="row">
-        <Field label={t("manualModel")}>
-          <Input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} />
+    <form className="channel-form" onSubmit={onSubmit}>
+      <FormSection description={t("channelConnectionHint")} title={t("connection")}>
+        <Field label={t("channelName")}>
+          <Input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
         </Field>
-        <Field label={t("alias")}>
-          <Input value={form.alias} onChange={(event) => setForm({ ...form, alias: event.target.value })} />
+        <Field label={t("baseUrl")}>
+          <Input required value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} />
         </Field>
+        <Field label={t("apiKey")}>
+          <Input
+            required
+            type="password"
+            value={form.apiKey}
+            onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
+          />
+        </Field>
+      </FormSection>
+
+      <FormSection description={t("channelRoutingHint")} title={t("routing")}>
+        <div className="channel-form-two-col">
+          <Field label={t("priority")}>
+            <Input
+              min={0}
+              type="number"
+              value={form.priority}
+              onChange={(event) => setForm({ ...form, priority: event.target.value })}
+            />
+          </Field>
+          <div className="channel-priority-note">
+            <strong>{t("lowerPriorityWins")}</strong>
+            <span>{t("priorityHint")}</span>
+          </div>
+        </div>
+      </FormSection>
+
+      <FormSection description={t("channelModelsHint")} title={t("visibleModels")}>
+        <div className="channel-manual-model">
+          <Field label={t("manualModel")}>
+            <Input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} />
+          </Field>
+          <Field label={t("alias")}>
+            <Input value={form.alias} onChange={(event) => setForm({ ...form, alias: event.target.value })} />
+          </Field>
+        </div>
+        <div className="channel-probe-row">
+          <Button onClick={onProbe} type="button" variant="outline">
+            {t("probeModels")}
+          </Button>
+          <span>{t("probeModelsHint")}</span>
+        </div>
+        {modelRows.length > 0 && <ModelSelector modelRows={modelRows} setModelRows={setModelRows} t={t} />}
+      </FormSection>
+
+      <div className="channel-form-footer">
+        <Button type="submit">{t("save")}</Button>
       </div>
-      <Button onClick={onProbe} type="button" variant="outline">
-        {t("probeModels")}
-      </Button>
-      {modelRows.length > 0 && <ModelSelector modelRows={modelRows} setModelRows={setModelRows} t={t} />}
-      <Button type="submit">{t("save")}</Button>
     </form>
+  );
+}
+
+function FormSection({ children, description, title }: { children: ReactNode; description: string; title: string }) {
+  return (
+    <section className="channel-form-section">
+      <div className="channel-form-section-heading">
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      <div className="channel-form-section-body">{children}</div>
+    </section>
   );
 }
 
@@ -349,4 +402,38 @@ function apiKeyEntriesForSave(editingChannel: OpenAIChannel | null, apiKey: stri
     }
   }
   return entries;
+}
+
+function channelSummary(channels: ChannelsResponse) {
+  const all = [...channels["openai-api"], ...channels["chatgpt-oauth"]];
+  return {
+    credentials: channels["openai-api"].reduce((total, channel) => total + (channel["api-key-entries"]?.length ?? 0), 0),
+    enabled: all.filter((channel) => !channel.disabled).length,
+    models: all.reduce((total, channel) => total + (channel.models?.length ?? 0), 0),
+    total: all.length,
+  };
+}
+
+function SummaryTile({
+  icon,
+  label,
+  tone,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  tone?: "success";
+  value: number;
+}) {
+  return (
+    <Card className="channel-summary-tile">
+      <CardContent>
+        <span className={tone === "success" ? "channel-summary-icon is-success" : "channel-summary-icon"}>{icon}</span>
+        <div>
+          <span>{label}</span>
+          <strong>{value.toLocaleString()}</strong>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }

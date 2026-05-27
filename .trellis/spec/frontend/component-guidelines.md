@@ -58,6 +58,8 @@ Current examples:
 - Visual style should stay flat, restrained, and operational: use thin borders, neutral surfaces, compact typography, and low-saturation semantic colors.
 - Avoid decorative gradients, heavy shadows, glass effects, layout-shifting hover transforms, and marketing-style card sections in the console.
 - App-level page titles belong in `AppShell`; route toolbars should prioritize actions and avoid visually duplicating the same heading.
+- Configuration resource screens with many attributes, such as channels, should prefer scannable row cards with grouped metadata over very wide tables.
+  Use tables when comparing repeated numeric/log data; use row cards when each item needs status, routing metadata, chips, health, and actions.
 
 ---
 

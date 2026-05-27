@@ -1,7 +1,10 @@
+import { Activity, Edit3, Power, Trash2 } from "lucide-react";
+import { ReactNode } from "react";
+import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { DataTable } from "../../components/ui/data-table";
 import type { ChannelHealthResult, ModelEntry, OAuthChannel, OpenAIChannel } from "../../lib/types";
+import { cn } from "../../lib/cn";
 
 type ChannelListItem = OpenAIChannel | OAuthChannel;
 
@@ -29,56 +32,120 @@ export function ChannelList({
   const safeItems = items ?? [];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
+    <Card className="channel-list-card">
+      <CardHeader className="channel-list-header">
+        <div>
+          <CardTitle>{title}</CardTitle>
+          <span>{`${safeItems.length.toLocaleString()} ${t("channels")}`}</span>
+        </div>
       </CardHeader>
       <CardContent>
-        <DataTable
-          empty={t("empty")}
-          headers={[
-            t("channelName"),
-            t("status"),
-            t("upstream"),
-            t("credentials"),
-            t("routing"),
-            t("visibleModels"),
-            t("health"),
-            "",
-          ]}
-          rows={safeItems.map((item) => [
-            <div className="table-cell-stack" key={`${item.name}-name`}>
-              <strong>{item.name}</strong>
-              {item.notes && <span>{item.notes}</span>}
-            </div>,
-            <StatusText disabled={item.disabled} t={t} />,
-            <UpstreamCell item={item} t={t} />,
-            credentialLabel(item, t),
-            <RoutingCell item={item} t={t} />,
-            <ModelList key={`${item.name}-models`} models={item.models} t={t} />,
-            <HealthCell health={health?.[item.name]} name={item.name} onCheckHealth={onCheckHealth} t={t} type={type} />,
-            <div className="table-actions" key={`${item.name}-actions`}>
-              {"base-url" in item && onEdit && (
-                <Button onClick={() => onEdit(item)} size="sm" type="button" variant="outline">
-                  {t("edit")}
-                </Button>
-              )}
-              <Button onClick={() => void onToggle(item)} size="sm" type="button" variant="outline">
-                {item.disabled ? t("enable") : t("disable")}
-              </Button>
-              <Button onClick={() => void onDelete(item.name)} size="sm" type="button" variant="destructive">
-                {t("delete")}
-              </Button>
-            </div>,
-          ])}
-        />
+        {safeItems.length === 0 ? (
+          <div className="channel-empty-state">
+            <strong>{t("noChannels")}</strong>
+            <span>{t(type === "openai-api" ? "openAIEmptyHint" : "oauthEmptyHint")}</span>
+          </div>
+        ) : (
+          <div className="channel-list">
+            {safeItems.map((item) => (
+              <ChannelRow
+                health={health?.[item.name]}
+                item={item}
+                key={item.name}
+                onCheckHealth={onCheckHealth}
+                onDelete={onDelete}
+                onEdit={onEdit}
+                onToggle={onToggle}
+                t={t}
+                type={type}
+              />
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function StatusText({ disabled, t }: { disabled?: boolean; t: (key: string) => string }) {
-  return <span className={disabled ? "status-text danger" : "status-text success"}>{disabled ? t("disabled") : t("enabled")}</span>;
+function ChannelRow({
+  health,
+  item,
+  onCheckHealth,
+  onDelete,
+  onEdit,
+  onToggle,
+  t,
+  type,
+}: {
+  health?: ChannelHealthResult;
+  item: ChannelListItem;
+  onCheckHealth?: (name: string) => Promise<void>;
+  onDelete: (name: string) => Promise<void>;
+  onEdit?: (item: OpenAIChannel) => void;
+  onToggle: (item: ChannelListItem) => Promise<void>;
+  t: (key: string) => string;
+  type: "chatgpt-oauth" | "openai-api";
+}) {
+  const isOpenAI = "base-url" in item;
+
+  return (
+    <article className={cn("channel-row", item.disabled && "is-disabled")}>
+      <div className="channel-row-main">
+        <div className="channel-title-line">
+          <span className={cn("channel-status-dot", item.disabled ? "is-danger" : "is-success")} aria-hidden="true" />
+          <div className="channel-title-copy">
+            <strong>{item.name}</strong>
+            <span>{item.notes || (isOpenAI ? item["base-url"] : t("oauthToken"))}</span>
+          </div>
+          <div className="channel-badges">
+            <Badge variant={item.disabled ? "danger" : "success"}>{item.disabled ? t("disabled") : t("enabled")}</Badge>
+            <Badge variant="muted">{isOpenAI ? t("openAIType") : t("oauthType")}</Badge>
+          </div>
+        </div>
+
+        <div className="channel-meta-grid">
+          <MetaBlock label={t("upstream")} value={<UpstreamCell item={item} t={t} />} />
+          <MetaBlock label={t("credentials")} value={credentialLabel(item, t)} />
+          <MetaBlock label={t("routing")} value={<RoutingCell item={item} t={t} />} />
+          <MetaBlock label={t("visibleModels")} value={`${(item.models ?? []).length.toLocaleString()} ${t("models")}`} />
+        </div>
+
+        <div className="channel-models">
+          <span>{t("visibleModels")}</span>
+          <ModelList models={item.models} t={t} />
+        </div>
+      </div>
+
+      <aside className="channel-row-side">
+        <HealthCell health={health} name={item.name} onCheckHealth={onCheckHealth} t={t} type={type} />
+        <div className="channel-actions">
+          {isOpenAI && onEdit && (
+            <Button onClick={() => onEdit(item)} size="sm" type="button" variant="outline">
+              <Edit3 size={14} />
+              {t("edit")}
+            </Button>
+          )}
+          <Button onClick={() => void onToggle(item)} size="sm" type="button" variant="outline">
+            <Power size={14} />
+            {item.disabled ? t("enable") : t("disable")}
+          </Button>
+          <Button onClick={() => void onDelete(item.name)} size="sm" type="button" variant="destructive">
+            <Trash2 size={14} />
+            {t("delete")}
+          </Button>
+        </div>
+      </aside>
+    </article>
+  );
+}
+
+function MetaBlock({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="channel-meta-item">
+      <span>{label}</span>
+      <div>{value}</div>
+    </div>
+  );
 }
 
 function UpstreamCell({ item, t }: { item: ChannelListItem; t: (key: string) => string }) {
@@ -118,13 +185,12 @@ function HealthCell({
     return <span className="muted-text">{t("manualOnly")}</span>;
   }
   return (
-    <div className="table-cell-stack">
-      {health && (
-        <span className={health.ok ? "status-text success" : "status-text danger"}>
-          {health.ok ? `${t("healthy")} ${health.latencyMs ?? 0}ms` : health.error || t("unhealthy")}
-        </span>
-      )}
+    <div className="channel-health">
+      <Badge variant={health ? (health.ok ? "success" : "danger") : "muted"}>
+        {health ? (health.ok ? `${t("healthy")} ${health.latencyMs ?? 0}ms` : health.error || t("unhealthy")) : t("notChecked")}
+      </Badge>
       <Button onClick={() => void onCheckHealth?.(name)} size="sm" type="button" variant="outline">
+        <Activity size={14} />
         {t("healthCheck")}
       </Button>
     </div>
