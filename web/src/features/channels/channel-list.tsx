@@ -107,12 +107,15 @@ function ChannelRow({
           <MetaBlock label={t("upstream")} value={<UpstreamCell item={item} t={t} />} />
           <MetaBlock label={t("credentials")} value={credentialLabel(item, t)} />
           <MetaBlock label={t("routing")} value={<RoutingCell item={item} t={t} />} />
-          <MetaBlock label={t("visibleModels")} value={`${(item.models ?? []).length.toLocaleString()} ${t("models")}`} />
+          <MetaBlock
+            label={t("mappingCount")}
+            value={type === "openai-api" ? `${(item.models ?? []).length.toLocaleString()} ${t("mappings")}` : t("notApplicable")}
+          />
         </div>
 
         <div className="channel-models">
-          <span>{t("visibleModels")}</span>
-          <ModelList models={item.models} t={t} />
+          <span>{t("aliasMappings")}</span>
+          <ModelList models={item.models} t={t} type={type} />
         </div>
       </div>
 
@@ -204,20 +207,33 @@ function credentialLabel(item: ChannelListItem, t: (key: string) => string) {
   return item.oauth?.["refresh-token"] || item.oauth?.["access-token"] ? t("configured") : t("notConfigured");
 }
 
-function ModelList({ models, t }: { models: ModelEntry[] | null | undefined; t: (key: string) => string }) {
+function ModelList({
+  models,
+  t,
+  type,
+}: {
+  models: ModelEntry[] | null | undefined;
+  t: (key: string) => string;
+  type: "chatgpt-oauth" | "openai-api";
+}) {
   const safeModels = models ?? [];
   const visible = safeModels.slice(0, 8);
   const hiddenCount = Math.max(0, safeModels.length - visible.length);
 
+  if (type !== "openai-api") {
+    return <span className="muted-text">{t("oauthModelsUnusedHint")}</span>;
+  }
+
   if (safeModels.length === 0) {
-    return <span className="muted-text">{t("empty")}</span>;
+    return <span className="muted-text">{t("passthroughModelsHint")}</span>;
   }
 
   return (
     <div className="model-chip-list">
       {visible.map((model) => (
         <span className="model-chip" key={`${model.name}:${model.alias ?? ""}`} title={model.name}>
-          {model.alias || model.name}
+          <span>{model.alias || model.name}</span>
+          {model.alias && model.alias !== model.name && <small>{model.name}</small>}
         </span>
       ))}
       {hiddenCount > 0 && <span className="model-chip muted">{`+${hiddenCount}`}</span>}

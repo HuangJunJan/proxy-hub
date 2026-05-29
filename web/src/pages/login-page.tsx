@@ -5,8 +5,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
-import { Toast } from "../components/ui/toast";
-import { api, getErrorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 
 export function LoginPage() {
@@ -14,17 +13,15 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setError("");
     try {
       const result = await api.login(username, password);
       setAuthenticated(result.username);
       navigate("/dashboard");
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -42,7 +39,6 @@ export function LoginPage() {
             <Field label={t("setupPassword")}>
               <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
             </Field>
-            {error && <Toast variant="destructive">{error}</Toast>}
             <Button type="submit">{t("loginSubmit")}</Button>
           </form>
         </CardContent>

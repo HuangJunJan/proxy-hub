@@ -230,6 +230,61 @@ proxyHandler.Register(openAICompat)
 - Non-streaming successful responses may be buffered to parse `usage` and apply body logging policy.
 - Streaming successful responses are not buffered; token usage parsing requires a dedicated stream parser before enabling stream token totals.
 
+### OpenAI Channel Model Pass-Through
+
+#### 1. Scope / Trigger
+- Trigger: config validation, router indexing, proxy handlers, admin chat, and frontend channel forms all share the channel model contract.
+
+#### 2. Signatures
+- `config.OpenAIAPIChannel.Models []config.ModelEntry`
+- `config.ChatGPTOAuthChannel.Models []config.ModelEntry`
+- `router.NewIndex(cfg *config.Config) *Index`
+- `(*router.Index).Resolve(model string) []router.Hit`
+- `(*router.Index).Models() []string`
+
+#### 3. Contracts
+- `openai-api.models` is optional. Empty means all requested downstream model names are eligible for pass-through on enabled OpenAI-compatible channels.
+- Explicit `models[]` entries still win first: alias/name matches route to the configured upstream `ModelEntry.Name`.
+- When no explicit model matches, `Resolve(requested)` returns enabled OpenAI-compatible hits with `Hit.UpstreamModelName = requested`.
+- `chatgpt-oauth.models` remains required and does not get pass-through fallback.
+- `Index.Models()` returns only explicit aliases/names from `models[]`; it must not attempt to enumerate pass-through models.
+- Admin selected-channel chat follows the same OpenAI pass-through rule: empty requested model is invalid, unknown non-empty model is forwarded unchanged for OpenAI-compatible channels.
+
+#### 4. Validation & Error Matrix
+- OpenAI channel with empty models -> validation succeeds.
+- OAuth channel with empty models -> validation error on `chatgpt-oauth[n].models`.
+- Explicit alias match -> upstream model is the configured `name`.
+- No explicit match + enabled OpenAI channel -> upstream model is the requested model.
+- No explicit match + no enabled OpenAI channel -> `/v1/*` returns OpenAI-compatible `model_not_found`.
+
+#### 5. Good/Base/Bad Cases
+- Good: `Resolve("gpt-4.1")` returns pass-through hits for an enabled OpenAI channel with no models.
+- Base: `GET /v1/models` returns configured aliases only, even though pass-through accepts more names.
+- Bad: treating `models[]` as an allowlist and returning 404 for every unlisted OpenAI model.
+
+#### 6. Tests Required
+- `internal/config` tests for OpenAI optional models and OAuth required models.
+- `internal/router` tests for alias priority and OpenAI pass-through fallback.
+- `internal/server` tests for chat/completions and responses pass-through, plus model_not_found when no OpenAI fallback exists.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+hits := idx.aliasToHits[normalizeAlias(model)]
+return append([]Hit(nil), hits...)
+```
+
+Correct:
+
+```go
+if hits := idx.aliasToHits[normalizeAlias(model)]; len(hits) > 0 {
+	return cloneHits(hits)
+}
+return idx.passthroughHits(model)
+```
+
 ---
 
 ## Testing Requirements

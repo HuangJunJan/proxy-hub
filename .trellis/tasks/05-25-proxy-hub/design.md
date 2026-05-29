@@ -88,7 +88,7 @@ api-keys:
   - token: sk-proxy-hub-IjKl9012MnOp3456...
     name: claude-code
 
-# 上游：OpenAI 兼容（可挂多 key 凭证池）
+# 上游：OpenAI 兼容（可挂多 key 凭证池；models 可为空，空时默认透传全部模型）
 openai-api:
   - name: openai-official                      # 唯一标识
     base-url: https://api.openai.com
@@ -145,8 +145,9 @@ scheduler:
 
 - **标识**：所有顶层数组成员的唯一键都是 `name`（`api-keys[]` 的 name 可选，省略时控制台展示掩码 token）。同一 section 内 name 必须唯一。
 - **`priority`** 仅 `openai-api` 类生效（越小越先），缺省 100；`chatgpt-oauth` 忽略 priority。
-- **`models[]` 语义**：每项 = "一对 (上游真实名, 下游可见名)"。
-  - 单条 `{name: gpt-4o}` → alias 缺省为 gpt-4o，1:1 透传
+- **`models[]` 语义**：每项 = "一对 (上游真实名, 下游可见名)"。对 `openai-api`，`models[]` 是可选的显式枚举 / 别名映射表；为空时请求的下游模型名默认原样传给上游。对 `chatgpt-oauth`，`models[]` 仍必填。
+  - `openai-api` 空 `models[]` → 不枚举显式模型，但所有下游模型名默认原样透传
+  - 单条 `{name: gpt-4o}` → alias 缺省为 gpt-4o，把 gpt-4o 加入 `/v1/models` 的显式枚举，转发时仍是 1:1
   - 单条 `{name: deepseek-chat, alias: gpt-5.4}` → 下游 gpt-5.4 路由到上游 deepseek-chat
   - 多条共享 alias（`{name: glm-5, alias: claude-opus-4.66}` + `{name: deepseek-v3.1, alias: claude-opus-4.66}`）→ 该 alias 在此渠道内形成 round-robin 池
   - 同一 name 配多 alias（重复条目，不同 alias）→ 给该上游模型加多个下游可见名
@@ -245,9 +246,9 @@ HTTP POST /v1/chat/completions
         ▼
 [proxy.Handler]
    ├─ 解析 body：取 model (= alias), stream
-   ├─ router.Resolve(alias)                    # 命中 (渠道, 上游真实模型 name) 集合
-   │     ├─ 空 → 404 model_not_found
-   │     └─ 返回 []Hit{ Channel, UpstreamModelName }
+   ├─ router.Resolve(alias)                    # 先查显式 alias；未命中则 openai-api 默认透传
+   │     ├─ 无显式命中且无启用 openai-api → 404 model_not_found
+   │     └─ 返回 []Hit{ Channel, UpstreamModelName }（透传时 UpstreamModelName = alias）
    ├─ scheduler.Pick(集合)                     # 按 priority + round-robin + 熔断
    │     └─ 循环 max-retries+1:
    │           ├─ 选下一个未熔断的 hit
@@ -295,7 +296,7 @@ HTTP POST /v1/chat/completions
 ### 5.1 索引结构（启动 / reload 时构建）
 
 ```go
-// alias -> 候选渠道清单（含 alias 在该渠道下对应的上游模型名）
+// alias -> 显式候选渠道清单（含 alias 在该渠道下对应的上游模型名）
 type HitEntry struct {
     Channel          *ChannelRuntime
     UpstreamModelName string   // alias 在该渠道里对应的 name
@@ -303,14 +304,17 @@ type HitEntry struct {
 type Index struct {
     // 一个 alias 在同一渠道内可能对应多个上游 name（pool），所以 value 是 []HitEntry
     aliasToHits map[string][]HitEntry
+    openAIPassthrough []HitEntry // enabled openai-api channels; Resolve 未命中显式 alias 时使用
 }
 ```
 
 构建规则：
-- 遍历 enabled 渠道，遍历每个 `models[]` 项：
+- 遍历 enabled `openai-api` 渠道，先加入 `openAIPassthrough`；遍历其 `models[]` 项：
   - `effectiveAlias = item.alias ?? item.name`
   - 把 `HitEntry{channel, item.name}` 追加到 `aliasToHits[effectiveAlias]`
+- 遍历 enabled `chatgpt-oauth` 渠道时只读取 `models[]`，不加入透传候选
 - alias 大小写规范化：lowercase 比较（避免客户端大小写不一致）
+- `GET /v1/models` 只返回 `aliasToHits` 的显式 union；默认透传能力不能也不应该被展开成无限模型列表
 
 ### 5.2 ChannelRuntime
 

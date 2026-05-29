@@ -20,7 +20,7 @@
    - `openai-api`：OpenAI 兼容（baseUrl + key），覆盖 OpenAI 官方、OpenRouter、DeepSeek、月之暗面、自建网关等。
    - `chatgpt-oauth`：ChatGPT OAuth（复用 ChatGPT 订阅/Codex 凭证）。
 2. **下游协议**：仅 OpenAI 兼容（`POST /v1/chat/completions`、`GET /v1/models`），流式 / 非流式皆支持。
-3. **模型路由与别名**：每个渠道在 YAML 中显式声明它对外提供的"下游可见模型"，每个模型可附带 `aliases` 列表。下游请求 `model=X` 时，从所有启用渠道中查找在 `name` 或 `aliases` 中命中 X 的渠道集合，按调度策略选一个，并使用该渠道里 X 对应的真实模型名调用上游。除模型名映射外不做任何业务改写。
+3. **模型路由与别名**：`openai-api` 渠道默认透传全部模型：下游请求 `model=X` 时，若没有命中显式别名映射，则把 `X` 原样传给所有启用的 OpenAI 兼容上游候选。`models[]` 仅用于维护需要枚举到 `/v1/models` 或需要改名的显式映射。`chatgpt-oauth` 渠道仍需显式维护模型列表，因为它没有标准 OpenAI models 接口。除模型名映射外不做任何业务改写。
 4. **配置形态**：
    - 上游渠道、下游 API Key、管理员账号、监听端口等"配置类"数据存 YAML 文件，方便人工编辑与迁移。
    - 运行时数据（请求日志、统计聚合、渠道健康状态）存 SQLite。
@@ -60,11 +60,11 @@
 
 - FR-2.1 YAML 顶层按源分两个 section：`openai-api:` 与 `chatgpt-oauth:`，各自是渠道数组。
 - FR-2.2 渠道使用 `name` 作为唯一标识（无独立 `id`）；同一 section 内 `name` 必须唯一；改名等同于"删旧建新"，历史日志保留旧 name。
-- FR-2.3 `openai-api` 渠道字段：`name`、`base-url`、`priority`（数字越小越先用，缺省 100）、`api-key-entries[]`（凭证池）、`models[]`、`disabled?`（缺省启用）、`timeout-sec?`、`notes?`。
+- FR-2.3 `openai-api` 渠道字段：`name`、`base-url`、`priority`（数字越小越先用，缺省 100）、`api-key-entries[]`（凭证池）、`models[]?`（可选显式映射 / 枚举项）、`disabled?`（缺省启用）、`timeout-sec?`、`notes?`。
 - FR-2.4 `api-key-entries[]` 每项：`api-key`（必填）、`proxy-url?`（可选，按 key 覆盖代理）。同一渠道内多 key 自动 round-robin 形成凭证池。
 - FR-2.5 `chatgpt-oauth` 渠道字段：`name`、`oauth`（含 `access-token` / `refresh-token` / `expires-at`）、`models[]`、`disabled?`、`timeout-sec?`、`notes?`。
-- FR-2.6 `models[]` 每项：`name`（上游真实模型名）、`alias?`（下游可见名，缺省 = `name`）。**重复同一 `name` 配不同 `alias`** 为该上游模型添加多个下游可见名；**多个不同 `name` 配同一 `alias`** 在该渠道内形成 alias 内的上游模型池（round-robin）。
-- FR-2.7 控制台"新增/编辑 openai-api 渠道"页面提供**"拉取模型列表"按钮**：调用上游 `GET {base-url}/v1/models`，把返回模型渲染为可勾选清单，写入 `models[]`（alias 默认等于 name，用户可改）。失败时显示错误并允许手动填写。
+- FR-2.6 `models[]` 每项：`name`（上游真实模型名）、`alias?`（下游可见名，缺省 = `name`）。对 `openai-api`，空 `models[]` 表示不枚举显式模型但仍透传全部模型；单条 `{name}` 仅表示把该模型加入 `/v1/models` 的显式枚举。**重复同一 `name` 配不同 `alias`** 为该上游模型添加多个下游可见名；**多个不同 `name` 配同一 `alias`** 在该渠道内形成 alias 内的上游模型池（round-robin）。
+- FR-2.7 控制台"新增/编辑 openai-api 渠道"页面提供**"拉取模型列表"按钮**：调用上游 `GET {base-url}/v1/models`，把返回模型渲染为可选候选清单。用户可勾选候选写入 `models[]`，alias 可选；不勾选任何模型也保存渠道并启用默认透传。失败时显示错误并允许手动填写。
 - FR-2.8 `chatgpt-oauth` 渠道无标准 models 接口，模型列表由用户在控制台手动维护（提供常用预设建议，如 `gpt-5-codex` / `gpt-4.1`）。
 - FR-2.9 支持手动触发"健康检查"（轻量上游请求验证可用）。
 - FR-2.10 失败码（401/403/429/5xx/timeout）触发临时熔断（冷却时长可配，默认 60s）。
@@ -72,15 +72,15 @@
 ### FR-3 下游 OpenAI 兼容 API
 
 - FR-3.1 `POST /v1/chat/completions` 支持 `stream: true/false`，逐 chunk 透传。
-- FR-3.2 `GET /v1/models` 返回所有启用渠道 `models[].alias`（若未设则 `models[].name`）去重并集。
+- FR-3.2 `GET /v1/models` 返回所有启用渠道显式配置的 `models[].alias`（若未设则 `models[].name`）去重并集。OpenAI 兼容渠道的默认透传模型无法预先枚举，因此不会自动出现在该响应里。
 - FR-3.3 Bearer Token 鉴权；无效 / 禁用 Key 返回 OpenAI 标准错误体（`401 invalid_api_key`）。
 - FR-3.4 上游全部失败时返回最后一次错误的 OpenAI 兼容标准化形式，错误信息脱敏。
 
 ### FR-4 调度与故障转移
 
-- FR-4.1 收到下游请求后解析 `model` 字段，把它当作"下游可见名"在所有启用渠道的 `models[].alias`（未设则 `models[].name`）中查找命中渠道集合。
-- FR-4.2 命中集合内：`openai-api` 渠道按 priority 升序排队（同优先级 round-robin）；`chatgpt-oauth` 渠道独立成池 round-robin。命中集合为空则返回 `404 model_not_found` 的 OpenAI 兼容错误。
-- FR-4.3 路由到具体渠道后，使用该 alias 对应的 `name`（上游真实模型名）调用上游。若该渠道下 alias 对应多个 `name`（pool），先在 pool 内 round-robin 选一个。
+- FR-4.1 收到下游请求后解析 `model` 字段，先把它当作"下游可见名"在所有启用渠道的 `models[].alias`（未设则 `models[].name`）中查找显式命中集合。
+- FR-4.2 若显式命中集合为空，则所有启用的 `openai-api` 渠道都作为默认透传候选，且上游模型名等于下游请求的 `model`。若既无显式命中也无启用的 `openai-api` 渠道，则返回 `404 model_not_found` 的 OpenAI 兼容错误。
+- FR-4.3 命中集合内：`openai-api` 渠道按 priority 升序排队（同优先级 round-robin）；`chatgpt-oauth` 渠道独立成池 round-robin。显式别名命中时使用该 alias 对应的 `name`（上游真实模型名）调用上游；默认透传时使用下游请求模型名调用上游。
 - FR-4.4 渠道内多个 `api-key-entries` 自动 round-robin。
 - FR-4.5 单次失败按命中集合继续尝试下一渠道，最多 N 次（默认 2，可配）。
 - FR-4.6 熔断中的渠道跳过；命中集合全部熔断 / 失败则返回最后一次错误（标准化为 OpenAI 错误体）。
@@ -151,9 +151,9 @@
 - [ ] AC-10 重启进程后渠道 / Key / 历史统计 / 请求日志均保持不丢失。
 - [ ] AC-11 `proxy-hub.exe` 双击启动后自动打开浏览器到 `http://localhost:<port>` 加载控制台。
 - [ ] AC-12 配置 1 个 `chatgpt-oauth` 渠道后，对应模型的请求能成功路由。
-- [ ] AC-13 控制台新增 openai-api 渠道时点击"拉取模型列表"按钮，能获取上游模型并供勾选；勾选后 alias 默认等于 name 可改。
+- [ ] AC-13 控制台新增 openai-api 渠道时点击"拉取模型列表"按钮，能获取上游模型并供勾选；不勾选模型仍可保存并默认透传，勾选后 alias 可选。
 - [ ] AC-14 模型别名生效：在 deepseek 渠道为 `deepseek-chat` 加一条 `alias: gpt-5.4` 后，下游 `model=gpt-5.4` 的请求被路由到该渠道并以 `deepseek-chat` 调上游。
-- [ ] AC-15 `GET /v1/models` 返回所有启用渠道的 alias（未设则 name）去重并集。
+- [ ] AC-15 `GET /v1/models` 返回所有启用渠道显式配置的 alias（未设则 name）去重并集；默认透传能力不自动枚举到该列表。
 - [ ] AC-16 首次启动（无 YAML 或缺少 admin/apiKeys）自动进入 setup 向导；完成后 YAML 被写入且后续启动直接进入登录页。
 - [ ] AC-17 同一 openai-api 渠道配置 ≥ 2 个 `api-key-entries`，多次请求观察到 key 轮询（监控页可查）。
 - [ ] AC-18 YAML 中省略所有默认值（如 `disabled` / `priority: 100`）后，控制台改一项 → 写回 YAML 仍只包含非默认值，文件保持精简。
@@ -164,7 +164,7 @@
 
 - OQ-A ~~配置写入路径~~ **已定**：方案 (a) — YAML 是唯一真相源，控制台原子写回 + 热加载，不保留注释，提供 `config.example.yaml` 作为带注释模板。
 - OQ-B ~~ChatGPT OAuth 路由策略~~ **已定**：按"下游模型名 → 命中渠道集合"路由；YAML 按 `openai-api:` / `chatgpt-oauth:` 分组；模型支持 `aliases` 别名映射；控制台提供"拉取模型列表"按钮。
-- OQ-C ~~`GET /v1/models` 返回什么~~ **已定**：所有启用渠道的 `models[].name` + `aliases` 去重并集。
+- OQ-C ~~`GET /v1/models` 返回什么~~ **已定**：所有启用渠道显式配置的 `models[].alias`（未设则 `name`）去重并集；OpenAI 兼容渠道的默认透传模型不自动枚举。
 - OQ-D ~~请求/响应正文是否落库~~ **已定**：默认 `failed_only`（仅失败请求记录正文），YAML 可配置 `always`（全量）或 `none`（永不记录）。
 - OQ-E ~~每 Key QPS 限流~~ **已定**：v1 不做，中间件链预留挂载点。
 - OQ-F ~~CORS~~ **已定**：默认关闭，YAML `cors.allowedOrigins: []` 可配。

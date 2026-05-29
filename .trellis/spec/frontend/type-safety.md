@@ -62,6 +62,57 @@ const channel: OpenAIChannel = {
 
 Shared cross-page response types also belong in `web/src/lib/types.ts`; page-local UI state can stay local.
 
+### Scenario: OpenAI Channel Model Mapping DTOs
+
+#### 1. Scope / Trigger
+- Trigger: channel forms and admin chat consume YAML-backed channel DTOs while backend routing supports OpenAI-compatible model pass-through.
+
+#### 2. Signatures
+- `OpenAIChannel.models?: ModelEntry[]`
+- `OAuthChannel.models?: ModelEntry[]`
+- `ModelEntry = { name: string; alias?: string }`
+- `POST /api/admin/channels/probe-models -> { models: string[] }`
+- `POST /api/admin/chat/completions` uses `AdminChatRequest.model`.
+
+#### 3. Contracts
+- `openai-api.models` is optional. Missing or empty means no explicit model enumeration; downstream requests still pass through with the requested model name unchanged.
+- `models[]` entries are explicit enumeration or alias overrides only. `{ name }` advertises a 1:1 model in `/v1/models`; `{ name, alias }` rewrites downstream `alias` to upstream `name`.
+- Probe results are candidates, not required config. The form may save zero selected rows.
+- `chatgpt-oauth.models` may be absent in the admin API response, so UI must render it defensively, but backend validation still requires configured OAuth models.
+- `GET /v1/models` displays only explicit `models[]` aliases/names; it cannot enumerate the infinite pass-through set.
+
+#### 4. Validation & Error Matrix
+- OpenAI channel with `models` omitted -> valid channel, default pass-through.
+- Manual alias without an upstream model -> UI error before submit.
+- Selected probed model with no alias -> save `{ name }`.
+- Unknown admin chat model on an OpenAI channel -> backend passes the model through unchanged.
+
+#### 5. Good/Base/Bad Cases
+- Good: channel form saves `{ "models": [] }` or omits `models` for pass-through-only channels.
+- Base: fetched rows default unselected; selected rows can leave alias blank.
+- Bad: requiring at least one fetched model before allowing an OpenAI-compatible channel to save.
+
+#### 6. Tests Required
+- `pnpm build` must type-check optional `models` consumers.
+- Backend config test asserts OpenAI channels without models validate.
+- Backend router/server tests assert unknown OpenAI model names pass through unchanged.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```ts
+if (models.length === 0) throw new Error("model required");
+```
+
+Correct:
+
+```ts
+const models: ModelEntry[] = selectedRows.map((row) =>
+  row.alias.trim() ? { name: row.name, alias: row.alias.trim() } : { name: row.name },
+);
+```
+
 ### Scenario: Admin Request Log DTOs
 
 #### 1. Scope / Trigger
@@ -126,7 +177,7 @@ Correct:
 
 #### 3. Contracts
 - Request shape is `{ channelType: "openai-api", channelName: string, model: string, messages: ChatMessage[] }`.
-- `model` is the channel-visible alias or name shown in the console; the backend resolves it against the selected channel's `models[]` before calling upstream.
+- `model` is the requested downstream model. The backend resolves explicit aliases first; if no alias matches on an OpenAI-compatible channel, it forwards the requested model unchanged.
 - `messages[]` contains `{ role: "system" | "user" | "assistant", content: string }`.
 - Response shape is `{ content: string, promptTokens?: number, completionTokens?: number, totalTokens?: number, raw?: unknown }`.
 - This endpoint uses admin session cookie auth, not downstream Bearer API keys.
@@ -136,7 +187,7 @@ Correct:
 - Missing session -> HTTP 401 `{ error: "login required" }`.
 - Unsupported `channelType` -> HTTP 501 `{ error }`.
 - Missing `channelName`, `model`, or `messages` -> HTTP 400 `{ error }`.
-- Channel not found or model not found in selected channel -> HTTP 404 `{ error }`.
+- Channel not found -> HTTP 404 `{ error }`.
 - Upstream non-2xx or read/decode failure -> HTTP 502 `{ error }`.
 
 #### 5. Good/Base/Bad Cases

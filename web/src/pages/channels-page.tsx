@@ -7,7 +7,6 @@ import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "../components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Toast } from "../components/ui/toast";
 import { Toolbar } from "../components/ui/toolbar";
 import { ChannelList } from "../features/channels/channel-list";
 import { api, getErrorMessage } from "../lib/api";
@@ -29,15 +28,13 @@ export function ChannelsPage() {
   const [editingChannel, setEditingChannel] = useState<OpenAIChannel | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [modelRows, setModelRows] = useState<ModelSelection[]>([]);
-  const [error, setError] = useState("");
   const summary = useMemo(() => channelSummary(channels), [channels]);
 
   async function refresh() {
     try {
       setChannels(await api.channels());
-      setError("");
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -47,11 +44,11 @@ export function ChannelsPage() {
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    const models = selectedModels(form, modelRows);
-    if (models.length === 0) {
-      setError(t("modelRequired"));
-      return;
+    const mappingError = aliasMappingError(form);
+    if (mappingError) {
+      throw new Error(t(mappingError));
     }
+    const models = selectedModels(form, modelRows);
 
     const channel: OpenAIChannel = {
       ...(editingChannel ?? {}),
@@ -69,8 +66,8 @@ export function ChannelsPage() {
       }
       resetForm();
       await refresh();
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -78,10 +75,12 @@ export function ChannelsPage() {
     try {
       const result = await api.probeModels(form.baseUrl, form.apiKey);
       const uniqueModels = Array.from(new Set(result.models));
-      setModelRows(uniqueModels.map((name) => ({ alias: name, name, selected: true })));
-      setError("");
-    } catch (err) {
-      setError(getErrorMessage(err));
+      setModelRows((current) => {
+        const existing = new Map(current.map((row) => [row.name, row]));
+        return uniqueModels.map((name) => existing.get(name) ?? { alias: "", name, selected: false });
+      });
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -89,11 +88,9 @@ export function ChannelsPage() {
     try {
       const result = await api.healthCheckChannel("openai-api", name);
       setHealth((current) => ({ ...current, [name]: result }));
-      setError("");
     } catch (err) {
       const message = getErrorMessage(err);
       setHealth((current) => ({ ...current, [name]: { error: message, ok: false } }));
-      setError(message);
     }
   }
 
@@ -114,7 +111,7 @@ export function ChannelsPage() {
       name: channel.name,
       priority: String(channel.priority || 100),
     });
-    setModelRows(channel.models.map((model) => ({ alias: model.alias || model.name, name: model.name, selected: true })));
+    setModelRows((channel.models ?? []).map((model) => ({ alias: model.alias ?? "", name: model.name, selected: true })));
     setIsFormOpen(true);
   }
 
@@ -132,8 +129,8 @@ export function ChannelsPage() {
     try {
       await api.updateChannel("openai-api", channel.name, { ...channel, disabled: !channel.disabled });
       await refresh();
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -141,8 +138,8 @@ export function ChannelsPage() {
     try {
       await api.updateChannel("chatgpt-oauth", channel.name, { ...channel, disabled: !channel.disabled });
       await refresh();
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -185,12 +182,11 @@ export function ChannelsPage() {
         refreshLabel={t("refresh")}
         title={t("channels")}
       />
-      {error && <Toast variant="destructive">{error}</Toast>}
       <div className="channel-summary-grid">
         <SummaryTile icon={<Route size={16} />} label={t("totalChannels")} value={summary.total} />
         <SummaryTile icon={<ShieldCheck size={16} />} label={t("enabled")} tone="success" value={summary.enabled} />
         <SummaryTile icon={<KeyRound size={16} />} label={t("credentials")} value={summary.credentials} />
-        <SummaryTile icon={<Route size={16} />} label={t("visibleModels")} value={summary.models} />
+        <SummaryTile icon={<Route size={16} />} label={t("mappingCount")} value={summary.mappings} />
       </div>
       <Tabs
         onValueChange={(value) => {
@@ -297,17 +293,17 @@ function ChannelCreateForm({
         </div>
       </FormSection>
 
-      <FormSection description={t("channelModelsHint")} title={t("visibleModels")}>
+      <FormSection description={t("channelModelsHint")} title={t("aliasMappings")}>
         <div className="channel-manual-model">
-          <Field label={t("manualModel")}>
+          <Field label={t("modelName")}>
             <Input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} />
           </Field>
           <Field label={t("alias")}>
-            <Input value={form.alias} onChange={(event) => setForm({ ...form, alias: event.target.value })} />
+            <Input placeholder={t("optionalAlias")} value={form.alias} onChange={(event) => setForm({ ...form, alias: event.target.value })} />
           </Field>
         </div>
         <div className="channel-probe-row">
-          <Button onClick={onProbe} type="button" variant="outline">
+          <Button disabled={!form.baseUrl.trim() || !form.apiKey.trim()} onClick={onProbe} type="button" variant="outline">
             {t("probeModels")}
           </Button>
           <span>{t("probeModelsHint")}</span>
@@ -346,7 +342,7 @@ function ModelSelector({
   return (
     <div className="model-selector">
       <div className="model-selector-header">
-        <strong>{t("selectVisibleModels")}</strong>
+        <strong>{t("aliasMappingCandidates")}</strong>
         <span>{`${modelRows.filter((row) => row.selected).length}/${modelRows.length}`}</span>
       </div>
       <div className="model-selector-list">
@@ -364,6 +360,7 @@ function ModelSelector({
             <code title={row.name}>{row.name}</code>
             <Input
               aria-label={`${t("alias")} ${row.name}`}
+              placeholder={t("alias")}
               value={row.alias}
               onChange={(event) => {
                 const next = [...modelRows];
@@ -379,16 +376,41 @@ function ModelSelector({
 }
 
 function selectedModels(form: ChannelFormState, modelRows: ModelSelection[]): ModelEntry[] {
-  const models = modelRows
-    .filter((row) => row.selected)
-    .map((row) => ({ alias: row.alias.trim() || undefined, name: row.name.trim() }))
-    .filter((row) => row.name);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
 
-  if (form.model.trim()) {
-    models.unshift({ alias: form.alias.trim() || undefined, name: form.model.trim() });
+  pushModelEntry(models, seen, form.model, form.alias);
+  for (const row of modelRows) {
+    if (row.selected) {
+      pushModelEntry(models, seen, row.name, row.alias);
+    }
   }
 
   return models;
+}
+
+function aliasMappingError(form: ChannelFormState) {
+  const hasManualModel = !!form.model.trim();
+  const hasManualAlias = !!form.alias.trim();
+  if (!hasManualModel && hasManualAlias) {
+    return "aliasRequiredForMapping";
+  }
+  return null;
+}
+
+function pushModelEntry(models: ModelEntry[], seen: Set<string>, rawName: string, rawAlias: string) {
+  const name = rawName.trim();
+  const alias = rawAlias.trim();
+  if (!name) {
+    return;
+  }
+  const normalizedAlias = alias && alias !== name ? alias : "";
+  const key = `${name}\x00${normalizedAlias}`;
+  if (seen.has(key)) {
+    return;
+  }
+  seen.add(key);
+  models.push(normalizedAlias ? { alias: normalizedAlias, name } : { name });
 }
 
 function apiKeyEntriesForSave(editingChannel: OpenAIChannel | null, apiKey: string): OpenAIChannel["api-key-entries"] {
@@ -409,7 +431,7 @@ function channelSummary(channels: ChannelsResponse) {
   return {
     credentials: channels["openai-api"].reduce((total, channel) => total + (channel["api-key-entries"]?.length ?? 0), 0),
     enabled: all.filter((channel) => !channel.disabled).length,
-    models: all.reduce((total, channel) => total + (channel.models?.length ?? 0), 0),
+    mappings: channels["openai-api"].reduce((total, channel) => total + (channel.models?.length ?? 0), 0),
     total: all.length,
   };
 }

@@ -4,7 +4,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { DataTable } from "../components/ui/data-table";
 import { Toolbar } from "../components/ui/toolbar";
 import { MetricCard } from "../features/dashboard/metric-card";
-import { api, getErrorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import type { ChannelSummary, ChannelsResponse } from "../lib/types";
 
@@ -14,7 +14,6 @@ export function DashboardPage() {
   const { t } = useAppContext();
   const [channels, setChannels] = useState<ChannelsResponse>(emptyChannels);
   const [stats, setStats] = useState<ChannelSummary[]>([]);
-  const [error, setError] = useState("");
   const enabledChannels = useMemo(
     () => [...channels["openai-api"], ...channels["chatgpt-oauth"]].filter((channel) => !channel.disabled),
     [channels],
@@ -46,9 +45,8 @@ export function DashboardPage() {
       const [nextStats, nextChannels] = await Promise.all([api.channelStats("24h"), api.channels()]);
       setStats(nextStats);
       setChannels(nextChannels);
-      setError("");
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -59,7 +57,6 @@ export function DashboardPage() {
   return (
     <section className="stack">
       <Toolbar onRefresh={refresh} refreshLabel={t("refresh")} title={t("dashboard")} />
-      {error && <p className="error-text">{error}</p>}
       <div className="status-grid">
         <Card className="status-panel status-panel-primary">
           <CardContent>

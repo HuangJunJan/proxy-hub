@@ -9,9 +9,8 @@ import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "../components/ui/sheet";
 import { Textarea } from "../components/ui/textarea";
-import { Toast } from "../components/ui/toast";
 import { Toolbar } from "../components/ui/toolbar";
-import { api, getErrorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import type { DownstreamKey } from "../lib/types";
 
@@ -19,7 +18,6 @@ export function KeysPage() {
   const { t } = useAppContext();
   const [created, setCreated] = useState("");
   const [editingKey, setEditingKey] = useState<DownstreamKey | null>(null);
-  const [error, setError] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [keys, setKeys] = useState<DownstreamKey[]>([]);
   const [name, setName] = useState("");
@@ -28,9 +26,8 @@ export function KeysPage() {
   async function refresh() {
     try {
       setKeys(await api.keys());
-      setError("");
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -49,8 +46,8 @@ export function KeysPage() {
       }
       resetForm();
       await refresh();
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -79,8 +76,8 @@ export function KeysPage() {
     try {
       await api.updateKey(keyIdentifier(key), { disabled: !key.disabled });
       await refresh();
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -122,7 +119,6 @@ export function KeysPage() {
         refreshLabel={t("refresh")}
         title={t("keys")}
       />
-      {error && <Toast variant="destructive">{error}</Toast>}
       <Card>
         <CardContent>
           <DataTable

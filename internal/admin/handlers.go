@@ -405,7 +405,7 @@ func (h *Handler) chatCompletion(c *gin.Context) {
 	}
 	upstreamModel, ok := resolveChannelModel(ch.Models, req.Model)
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "model not found in selected channel"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "model is required"})
 		return
 	}
 	apiKey, ok := firstAPIKey(ch.APIKeyEntries)
@@ -688,13 +688,19 @@ func oauthChannelsOrEmpty(channels []config.ChatGPTOAuthChannel) []config.ChatGP
 
 func resolveChannelModel(models []config.ModelEntry, requested string) (string, bool) {
 	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return "", false
+	}
 	for _, model := range models {
-		if strings.EqualFold(model.EffectiveAlias(), requested) {
+		alias := strings.TrimSpace(model.EffectiveAlias())
+		if alias != "" && strings.EqualFold(alias, requested) {
 			name := strings.TrimSpace(model.Name)
-			return name, name != ""
+			if name != "" {
+				return name, true
+			}
 		}
 	}
-	return "", false
+	return requested, true
 }
 
 func validateChatMessages(messages []chatMessage) ([]chatMessage, bool) {

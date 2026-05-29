@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ScreenCenter } from "./components/screen-center";
 import { AppShell } from "./components/layout/app-shell";
+import { GlobalToast } from "./components/ui/global-toast";
 import { api } from "./lib/api";
 import { AppContextProvider } from "./lib/app-context";
 import { translate } from "./lib/i18n";
@@ -42,7 +43,7 @@ export function App() {
           setMode("setup");
           return;
         }
-        const me = await api.me();
+        const me = await api.me({ suppressGlobalError: true });
         if (cancelled) {
           return;
         }
@@ -82,10 +83,13 @@ export function App() {
 
   if (mode === "checking") {
     return (
-      <ScreenCenter>
-        <span className="spinner" />
-        {contextValue.t("loading")}
-      </ScreenCenter>
+      <>
+        <ScreenCenter>
+          <span className="spinner" />
+          {contextValue.t("loading")}
+        </ScreenCenter>
+        <GlobalToast />
+      </>
     );
   }
 
@@ -118,6 +122,7 @@ export function App() {
           </Route>
         )}
       </Routes>
+      <GlobalToast />
     </AppContextProvider>
   );
 }

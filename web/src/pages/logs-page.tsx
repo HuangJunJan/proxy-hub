@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Toolbar } from "../components/ui/toolbar";
 import { LogTable } from "../features/logs/log-table";
-import { api, getErrorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import type { LogsResponse } from "../lib/types";
 
@@ -40,7 +40,6 @@ const emptyFilters: LogFilters = {
 
 export function LogsPage() {
   const { t } = useAppContext();
-  const [error, setError] = useState("");
   const [filters, setFilters] = useState<LogFilters>(emptyFilters);
   const [logs, setLogs] = useState<LogsResponse>({ items: [], limit: 100, page: 1 });
 
@@ -59,9 +58,8 @@ export function LogsPage() {
     params.set("limit", LOG_LIMIT);
     try {
       setLogs(await api.logs(params));
-      setError("");
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -139,7 +137,6 @@ export function LogsPage() {
           </div>
         </CardContent>
       </Card>
-      {error && <p className="error-text">{error}</p>}
       <Card>
         <CardContent>
           <LogTable logs={logs.items} t={t} />

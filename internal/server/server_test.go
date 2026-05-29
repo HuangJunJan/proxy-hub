@@ -86,6 +86,42 @@ func TestChatCompletionsRoutesAliasToUpstreamModel(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsPassesThroughUnknownModel(t *testing.T) {
+	var gotModel string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode upstream request: %v", err)
+		}
+		gotModel = payload.Model
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-test","object":"chat.completion","choices":[]}`))
+	}))
+	defer upstream.Close()
+
+	router := NewRouter(Options{ConfigManager: testConfigManagerWithChannels(t, []config.OpenAIAPIChannel{
+		{
+			Name:          "openai",
+			BaseURL:       upstream.URL,
+			APIKeyEntries: []config.APIKeyEntry{{APIKey: "sk-upstream-test"}},
+		},
+	}, nil), Sessions: testSessions()})
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-4.1","messages":[]}`))
+	req.Header.Set("Authorization", "Bearer sk-proxy-hub-test-token-1234567890")
+	req.Header.Set("content-type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if gotModel != "gpt-4.1" {
+		t.Fatalf("upstream model = %q, want gpt-4.1", gotModel)
+	}
+}
+
 func TestRootChatCompletionsRouteSupportsBYOKBaseURLWithoutV1(t *testing.T) {
 	var gotModel string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -196,8 +232,47 @@ func TestRootResponsesRouteSupportsBYOKBaseURLWithoutV1(t *testing.T) {
 	}
 }
 
-func TestResponsesModelNotFoundReturnsOpenAIError(t *testing.T) {
-	router := NewRouter(Options{ConfigManager: testConfigManager(t, ""), Sessions: testSessions()})
+func TestResponsesPassesThroughUnknownModel(t *testing.T) {
+	var gotModel string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("upstream path = %s", r.URL.Path)
+		}
+		var payload struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode upstream request: %v", err)
+		}
+		gotModel = payload.Model
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-test","object":"response","output":[]}`))
+	}))
+	defer upstream.Close()
+
+	router := NewRouter(Options{ConfigManager: testConfigManagerWithChannels(t, []config.OpenAIAPIChannel{
+		{
+			Name:          "openai",
+			BaseURL:       upstream.URL,
+			APIKeyEntries: []config.APIKeyEntry{{APIKey: "sk-upstream-test"}},
+		},
+	}, nil), Sessions: testSessions()})
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(`{"model":"gpt-4.1","input":"hi"}`))
+	req.Header.Set("Authorization", "Bearer sk-proxy-hub-test-token-1234567890")
+	req.Header.Set("content-type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if gotModel != "gpt-4.1" {
+		t.Fatalf("upstream model = %q, want gpt-4.1", gotModel)
+	}
+}
+
+func TestResponsesModelNotFoundReturnsOpenAIErrorWhenNoOpenAIChannel(t *testing.T) {
+	router := NewRouter(Options{ConfigManager: testConfigManagerWithChannels(t, nil, nil), Sessions: testSessions()})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(`{"model":"missing-model","input":"hi"}`))
 	req.Header.Set("Authorization", "Bearer sk-proxy-hub-test-token-1234567890")
@@ -220,7 +295,7 @@ func TestResponsesModelNotFoundReturnsOpenAIError(t *testing.T) {
 func TestChatCompletionsModelNotFoundLogHasNoUpstreamKeyIndex(t *testing.T) {
 	db, monitorService, stopMonitor := testMonitor(t)
 	defer stopMonitor()
-	router := NewRouter(Options{ConfigManager: testConfigManager(t, ""), Sessions: testSessions(), Monitor: monitorService, Logs: db, Stats: db})
+	router := NewRouter(Options{ConfigManager: testConfigManagerWithChannels(t, nil, nil), Sessions: testSessions(), Monitor: monitorService, Logs: db, Stats: db})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"missing-model","messages":[]}`))
 	req.Header.Set("Authorization", "Bearer sk-proxy-hub-test-token-1234567890")

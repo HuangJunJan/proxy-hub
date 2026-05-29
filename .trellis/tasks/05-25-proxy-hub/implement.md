@@ -213,7 +213,7 @@ go test ./internal/upstream/chatgpt/... -race
 
 ### Steps
 
-1. **`internal/router/index.go`**：监听 config OnChange，重建 `aliasToHits` map（design.md §5.1）。alias 小写规范化。
+1. **`internal/router/index.go`**：监听 config OnChange，重建显式 `aliasToHits` map 与 enabled `openai-api` 透传候选（design.md §5.1）。alias 小写规范化；`GET /v1/models` 只返回显式 alias/name union。
 2. **`internal/scheduler/scheduler.go`**：
    - `ChannelRuntime` 同步加 / 删（reload 时与新 config diff，保留熔断状态）
    - `Pick(hits) iter.Seq[HitEntry]`：filterAlive → groupByPriority → bucket-RR
@@ -239,7 +239,7 @@ go test ./internal/router/... ./internal/scheduler/... -race
 
 1. **`internal/proxy/handler.go`**：
    - 解析 body 拿 `model`、`stream`
-   - `router.Resolve(model)` → hits
+   - `router.Resolve(model)` → hits（显式 alias 优先；否则 enabled `openai-api` 默认透传）
    - `for hit := range scheduler.Pick(hits)` 重试循环
    - openai-api：从 `hit.Channel.KeyPool.NextKey()` 拿凭证 → `adapter.Chat`
    - chatgpt-oauth：`adapter.Chat`（内部 ensureFresh）
@@ -327,7 +327,7 @@ go test ./internal/admin/... -race
    - `/login`
    - `<AppShell>`：侧栏 + 顶栏（主题/语言/退出）
    - `/dashboard`：渠道汇总卡片 + 24h 趋势图（recharts）
-   - `/channels`：列表 + 新建/编辑 Sheet，含"拉取模型列表"按钮（弹出可勾选清单）、alias 编辑、健康检查按钮
+   - `/channels`：列表 + 新建/编辑 Sheet，含"拉取模型列表"按钮（弹出可勾选候选清单）、可选 alias 编辑、健康检查按钮；`openai-api` 不要求配置模型，默认透传全部模型
    - `/keys`：列表 + 新建 dialog（创建后明文 token 仅显示一次）
    - `/logs`：表格 + 过滤（渠道/状态/时间范围）+ 分页
    - `/live`：虚拟列表 + SSE，最多保留 500 条

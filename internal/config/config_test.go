@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateAcceptsMinimalSetupConfig(t *testing.T) {
@@ -23,6 +24,35 @@ func TestValidateRejectsDuplicateChannelNames(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "duplicates") {
 		t.Fatalf("Validate() error = %v, want duplicate message", err)
+	}
+}
+
+func TestValidateAllowsOpenAIChannelWithoutModels(t *testing.T) {
+	cfg := validConfig()
+	cfg.OpenAIAPI[0].Models = nil
+	if err := Validate(cfg); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateRequiresOAuthChannelModels(t *testing.T) {
+	cfg := validConfig()
+	cfg.ChatGPTOAuth = []ChatGPTOAuthChannel{
+		{
+			Name: "chatgpt",
+			OAuth: OAuthConfig{
+				AccessToken:  "access-token",
+				RefreshToken: "refresh-token",
+				ExpiresAt:    time.Now().Add(time.Hour),
+			},
+		},
+	}
+	err := Validate(cfg)
+	if err == nil {
+		t.Fatal("Validate() error = nil, want missing models error")
+	}
+	if !strings.Contains(err.Error(), "chatgpt-oauth[0].models") {
+		t.Fatalf("Validate() error = %v, want chatgpt models message", err)
 	}
 }
 

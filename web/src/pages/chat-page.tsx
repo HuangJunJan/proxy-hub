@@ -4,10 +4,10 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Field } from "../components/ui/field";
+import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Toast } from "../components/ui/toast";
-import { api, getErrorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import type { ChatMessage, ChannelsResponse, ModelEntry, OpenAIChannel } from "../lib/types";
 
@@ -23,7 +23,6 @@ export function ChatPage() {
   const [model, setModel] = useState("");
   const [messages, setMessages] = useState<ChatLine[]>([]);
   const [draft, setDraft] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -38,9 +37,8 @@ export function ChatPage() {
     try {
       const next = await api.channels();
       setChannels(next);
-      setError("");
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -59,14 +57,14 @@ export function ChatPage() {
   }, [channelName, openAIChannels]);
 
   useEffect(() => {
-    if (modelOptions.length === 0) {
+    if (!selectedChannel) {
       setModel("");
       return;
     }
-    if (!modelOptions.some((option) => option.value === model)) {
+    if (!model.trim() && modelOptions.length > 0) {
       setModel(modelOptions[0].value);
     }
-  }, [model, modelOptions]);
+  }, [model, modelOptions, selectedChannel]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -75,7 +73,8 @@ export function ChatPage() {
   async function send(event?: FormEvent) {
     event?.preventDefault();
     const content = draft.trim();
-    if (!selectedChannel || !model || !content || loading) {
+    const requestedModel = model.trim();
+    if (!selectedChannel || !requestedModel || !content || loading) {
       return;
     }
     const userMessage: ChatLine = { content, id: crypto.randomUUID(), role: "user" };
@@ -83,20 +82,18 @@ export function ChatPage() {
     setMessages(nextMessages);
     setDraft("");
     setLoading(true);
-    setError("");
     try {
       const response = await api.chatCompletion({
         channelName: selectedChannel.name,
         channelType: "openai-api",
         messages: nextMessages.map(({ content: messageContent, role }) => ({ content: messageContent, role })),
-        model,
+        model: requestedModel,
       });
       setMessages((current) => [
         ...current,
         { content: response.content || JSON.stringify(response.raw ?? {}, null, 2), id: crypto.randomUUID(), role: "assistant" },
       ]);
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
       setMessages(messages);
     } finally {
       setLoading(false);
@@ -127,14 +124,20 @@ export function ChatPage() {
                 </Select>
               </Field>
               <Field label={t("model")}>
-                <Select value={model} onChange={(event) => setModel(event.target.value)}>
-                  {modelOptions.length === 0 && <option value="">{t("empty")}</option>}
+                <Input
+                  disabled={!selectedChannel}
+                  list="admin-chat-model-options"
+                  placeholder={t("modelPlaceholder")}
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                />
+                <datalist id="admin-chat-model-options">
                   {modelOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </Select>
+                </datalist>
               </Field>
               <div className="chat-meta">
                 <Badge variant={selectedChannel ? "success" : "muted"}>
@@ -150,7 +153,6 @@ export function ChatPage() {
                 <Button
                   onClick={() => {
                     setMessages([]);
-                    setError("");
                   }}
                   type="button"
                   variant="outline"
@@ -164,7 +166,6 @@ export function ChatPage() {
         </Card>
       </aside>
       <main className="chat-panel">
-        {error && <Toast variant="destructive">{error}</Toast>}
         <Card className="chat-card">
           <CardContent>
             <div className="chat-thread" aria-live="polite">
@@ -194,13 +195,13 @@ export function ChatPage() {
             </div>
             <form className="chat-compose" onSubmit={send}>
               <Textarea
-                disabled={!selectedChannel || !model || loading}
+                disabled={!selectedChannel || !model.trim() || loading}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={handleDraftKeyDown}
                 placeholder={t("chatPlaceholder")}
                 value={draft}
               />
-              <Button disabled={!selectedChannel || !model || !draft.trim() || loading} type="submit">
+              <Button disabled={!selectedChannel || !model.trim() || !draft.trim() || loading} type="submit">
                 <Send size={16} />
                 {t("send")}
               </Button>
@@ -216,7 +217,7 @@ function modelOptionsForChannel(channel: OpenAIChannel | null): ModelOption[] {
   if (!channel) {
     return [];
   }
-  return dedupeModelEntries(channel.models).map((entry) => {
+  return dedupeModelEntries(channel.models ?? []).map((entry) => {
     const value = effectiveAlias(entry);
     const upstream = entry.name.trim();
     return {

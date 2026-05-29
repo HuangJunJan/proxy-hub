@@ -10,7 +10,7 @@ export interface OpenAIChannel {
   "base-url": string;
   priority?: number;
   "api-key-entries": APIKeyEntry[];
-  models: ModelEntry[];
+  models?: ModelEntry[];
   disabled?: boolean;
   "timeout-sec"?: number;
   notes?: string;
@@ -23,7 +23,7 @@ export interface OAuthChannel {
     "refresh-token"?: string;
     "expires-at"?: string;
   };
-  models: ModelEntry[];
+  models?: ModelEntry[];
   disabled?: boolean;
   "timeout-sec"?: number;
   notes?: string;

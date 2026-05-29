@@ -105,7 +105,7 @@ func validateOpenAIChannels(channels []OpenAIAPIChannel, add func(string, ...any
 				}
 			}
 		}
-		validateModels(fmt.Sprintf("openai-api[%d]", i), ch.Models, add)
+		validateModels(fmt.Sprintf("openai-api[%d]", i), ch.Models, false, add)
 	}
 }
 
@@ -131,12 +131,12 @@ func validateOAuthChannels(channels []ChatGPTOAuthChannel, add func(string, ...a
 		if ch.OAuth.ExpiresAt.IsZero() {
 			add("chatgpt-oauth[%d].oauth.expires-at is required", i)
 		}
-		validateModels(fmt.Sprintf("chatgpt-oauth[%d]", i), ch.Models, add)
+		validateModels(fmt.Sprintf("chatgpt-oauth[%d]", i), ch.Models, true, add)
 	}
 }
 
-func validateModels(prefix string, models []ModelEntry, add func(string, ...any)) {
-	if len(models) == 0 {
+func validateModels(prefix string, models []ModelEntry, required bool, add func(string, ...any)) {
+	if required && len(models) == 0 {
 		add("%s.models must contain at least one model", prefix)
 		return
 	}

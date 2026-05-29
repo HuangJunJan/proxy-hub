@@ -7,8 +7,7 @@ import { CopyButton } from "../components/ui/copy-button";
 import { Dialog } from "../components/ui/dialog";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
-import { Toast } from "../components/ui/toast";
-import { api, getErrorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 
 export function SetupPage() {
@@ -17,16 +16,14 @@ export function SetupPage() {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [token, setToken] = useState("");
-  const [error, setError] = useState("");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setError("");
     try {
       const result = await api.setup(username, password);
       setToken(result.token);
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      // Global axios interceptor displays the error toast.
     }
   }
 
@@ -49,7 +46,6 @@ export function SetupPage() {
                 onChange={(event) => setPassword(event.target.value)}
               />
             </Field>
-            {error && <Toast variant="destructive">{error}</Toast>}
             <Button disabled={Boolean(token)} type="submit">
               {t("setupSubmit")}
             </Button>
