@@ -28,7 +28,7 @@ export function AppShell() {
             <span>{username}</span>
           </div>
         </div>
-        <nav>
+        <nav aria-label="Main navigation" className="sidebar-nav">
           {consoleRoutes.map((item) => {
             const Icon = item.icon;
             return (
@@ -60,15 +60,17 @@ export function AppShell() {
               <Activity size={16} />
               <span>{t("gatewayReady")}</span>
             </div>
-            <Select value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
-              <option value="zh">中文</option>
-              <option value="en">English</option>
-            </Select>
-            <Select value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}>
-              <option value="system">{t("system")}</option>
-              <option value="light">{t("light")}</option>
-              <option value="dark">{t("dark")}</option>
-            </Select>
+            <div className="topbar-control-group" aria-label="Display preferences">
+              <Select aria-label="Language" value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+              </Select>
+              <Select aria-label="Theme" value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}>
+                <option value="system">{t("system")}</option>
+                <option value="light">{t("light")}</option>
+                <option value="dark">{t("dark")}</option>
+              </Select>
+            </div>
             <Button
               onClick={async () => {
                 await api.logout();

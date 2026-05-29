@@ -264,7 +264,7 @@ svg {
   line-height: 1.25;
 }
 
-nav {
+.sidebar-nav {
   display: grid;
   gap: 6px;
 }
@@ -393,6 +393,17 @@ nav {
   justify-content: flex-end;
 }
 
+.topbar-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 3px;
+  box-shadow: var(--shadow);
+}
+
 .topbar-actions .ui-button,
 .topbar-actions .ui-select {
   width: auto;
@@ -400,7 +411,17 @@ nav {
 }
 
 .topbar-actions .ui-select {
-  min-width: 118px;
+  min-width: 112px;
+  min-height: 32px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.topbar-actions .ui-select:hover,
+.topbar-actions .ui-select:focus {
+  border-color: var(--border);
+  background: var(--panel);
 }
 
 .gateway-status {
@@ -1747,7 +1768,6 @@ nav {
     gap: 18px;
   }
 
-  nav,
   .channel-summary-grid,
   .channel-meta-grid,
   .metric-grid,
@@ -1766,6 +1786,19 @@ nav {
 
   .chat-compose {
     grid-template-columns: 1fr;
+  }
+
+  .sidebar-nav {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .topbar,
