@@ -996,12 +996,6 @@ svg {
   text-overflow: ellipsis;
 }
 
-.error-text {
-  margin: 0;
-  color: var(--danger);
-  overflow-wrap: anywhere;
-}
-
 .hint-text,
 .muted-text {
   margin: 0;
@@ -1504,7 +1498,7 @@ svg {
   display: grid;
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
 }
 
@@ -1680,14 +1674,14 @@ svg {
   align-items: center;
   gap: 2px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
   padding: 3px;
 }
 
 .segmented-control .ui-button {
   min-height: 32px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow: none;
 }
 
