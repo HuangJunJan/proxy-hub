@@ -1,0 +1,32 @@
+{
+  "id": "frontend-refactor",
+  "name": "frontend-refactor",
+  "title": "Frontend project refactor",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "jan",
+  "assignee": "jan",
+  "createdAt": "2026-05-29",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "05-29-frontend-ui-foundation",
+    "05-29-frontend-app-shell",
+    "05-29-frontend-page-refactor",
+    "05-29-frontend-api-hooks-state",
+    "05-29-frontend-css-cleanup"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
