@@ -3,13 +3,13 @@ import { FormEvent, useEffect, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { CopyButton } from "../components/ui/copy-button";
-import { DataTable } from "../components/ui/data-table";
 import { Dialog } from "../components/ui/dialog";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "../components/ui/sheet";
 import { Textarea } from "../components/ui/textarea";
 import { Toolbar } from "../components/ui/toolbar";
+import { KeyTable } from "../features/keys/key-table";
 import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import type { DownstreamKey } from "../lib/types";
@@ -121,27 +121,7 @@ export function KeysPage() {
       />
       <Card>
         <CardContent>
-          <DataTable
-            empty={t("empty")}
-            headers={[t("keyName"), t("token"), t("notes"), t("status"), ""]}
-            rows={keys.map((key) => [
-              key.name || "-",
-              key.tokenMask,
-              key.notes || "-",
-              <span className={key.disabled ? "status-text danger" : "status-text success"}>
-                {key.disabled ? t("disabled") : t("enabled")}
-              </span>,
-              <div className="table-actions" key={key.tokenMask}>
-                <CopyButton copiedLabel={t("copied")} label={t("copy")} value={key.token || key.tokenMask} />
-                <Button onClick={() => startEdit(key)} size="sm" type="button" variant="outline">
-                  {t("edit")}
-                </Button>
-                <Button onClick={() => void toggleKey(key)} size="sm" type="button" variant="outline">
-                  {key.disabled ? t("enable") : t("disable")}
-                </Button>
-              </div>,
-            ])}
-          />
+          <KeyTable keys={keys} onEdit={startEdit} onToggle={(key) => void toggleKey(key)} t={t} />
         </CardContent>
       </Card>
       <Dialog onClose={() => setCreated("")} open={Boolean(created)} title={t("token")}>
