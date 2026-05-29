@@ -9,6 +9,7 @@ import { Select } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
+import { useAsyncAction } from "../lib/use-async-action";
 import type { ChatMessage, ChannelsResponse, ModelEntry, OpenAIChannel } from "../lib/types";
 
 type ChatLine = ChatMessage & { id: string };
@@ -23,7 +24,6 @@ export function ChatPage() {
   const [model, setModel] = useState("");
   const [messages, setMessages] = useState<ChatLine[]>([]);
   const [draft, setDraft] = useState("");
-  const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const openAIChannels = useMemo(() => channels["openai-api"].filter((channel) => !channel.disabled), [channels]);
@@ -66,22 +66,17 @@ export function ChatPage() {
     }
   }, [model, modelOptions, selectedChannel]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, loading]);
-
-  async function send(event?: FormEvent) {
-    event?.preventDefault();
+  const { loading, run: sendMessage } = useAsyncAction(async () => {
     const content = draft.trim();
     const requestedModel = model.trim();
-    if (!selectedChannel || !requestedModel || !content || loading) {
+    if (!selectedChannel || !requestedModel || !content) {
       return;
     }
+    const previousMessages = messages;
     const userMessage: ChatLine = { content, id: crypto.randomUUID(), role: "user" };
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setDraft("");
-    setLoading(true);
     try {
       const response = await api.chatCompletion({
         channelName: selectedChannel.name,
@@ -94,10 +89,17 @@ export function ChatPage() {
         { content: response.content || JSON.stringify(response.raw ?? {}, null, 2), id: crypto.randomUUID(), role: "assistant" },
       ]);
     } catch {
-      setMessages(messages);
-    } finally {
-      setLoading(false);
+      setMessages(previousMessages);
     }
+  });
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, loading]);
+
+  function send(event?: FormEvent) {
+    event?.preventDefault();
+    void sendMessage();
   }
 
   function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
