@@ -5,11 +5,12 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import { useAsyncAction } from "../lib/use-async-action";
+import { useConfirm } from "../components/ui/use-confirm";
 import type { ChatMessage, ChannelsResponse, ModelEntry, OpenAIChannel } from "../lib/types";
 
 type ChatLine = ChatMessage & { id: string };
@@ -19,6 +20,7 @@ const emptyChannels: ChannelsResponse = { "chatgpt-oauth": [], "openai-api": [] 
 
 export function ChatPage() {
   const { t } = useAppContext();
+  const { confirm, confirmDialog } = useConfirm();
   const [channels, setChannels] = useState<ChannelsResponse>(emptyChannels);
   const [channelName, setChannelName] = useState("");
   const [model, setModel] = useState("");
@@ -116,13 +118,18 @@ export function ChatPage() {
           <CardContent>
             <div className="form-stack">
               <Field label={t("channelName")}>
-                <Select value={channelName} onChange={(event) => setChannelName(event.target.value)}>
-                  {openAIChannels.length === 0 && <option value="">{t("empty")}</option>}
-                  {openAIChannels.map((channel) => (
-                    <option key={channel.name} value={channel.name}>
-                      {channel.name}
-                    </option>
-                  ))}
+                <Select value={channelName || "none"} onValueChange={(value) => setChannelName(value === "none" ? "" : value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {openAIChannels.length === 0 && <SelectItem value="none">{t("empty")}</SelectItem>}
+                    {openAIChannels.map((channel) => (
+                      <SelectItem key={channel.name} value={channel.name}>
+                        {channel.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </Field>
               <Field label={t("model")}>
@@ -153,8 +160,17 @@ export function ChatPage() {
                   {t("refresh")}
                 </Button>
                 <Button
-                  onClick={() => {
-                    setMessages([]);
+                  onClick={async () => {
+                    const confirmed = await confirm({
+                      cancelLabel: t("cancel"),
+                      confirmLabel: t("clear"),
+                      description: t("confirmClearChat"),
+                      title: t("confirmClearChatTitle"),
+                      tone: "destructive",
+                    });
+                    if (confirmed) {
+                      setMessages([]);
+                    }
                   }}
                   type="button"
                   variant="outline"
@@ -167,6 +183,7 @@ export function ChatPage() {
           </CardContent>
         </Card>
       </aside>
+      {confirmDialog}
       <main className="chat-panel">
         <Card className="chat-card">
           <CardContent>

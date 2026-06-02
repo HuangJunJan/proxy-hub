@@ -12,6 +12,7 @@ import { ChannelList } from "../features/channels/channel-list";
 import { api, getErrorMessage } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import type { ChannelHealthResult, ChannelsResponse, ModelEntry, OAuthChannel, OpenAIChannel } from "../lib/types";
+import { useConfirm } from "../components/ui/use-confirm";
 
 type ChannelFormState = { alias: string; apiKey: string; baseUrl: string; model: string; name: string; priority: string };
 type ModelSelection = { alias: string; name: string; selected: boolean };
@@ -21,6 +22,7 @@ const emptyForm: ChannelFormState = { alias: "", apiKey: "", baseUrl: "", model:
 
 export function ChannelsPage() {
   const { t } = useAppContext();
+  const { confirm, confirmDialog } = useConfirm();
   const [activeType, setActiveType] = useState<"chatgpt-oauth" | "openai-api">("openai-api");
   const [channels, setChannels] = useState<ChannelsResponse>(emptyChannels);
   const [form, setForm] = useState<ChannelFormState>(emptyForm);
@@ -58,6 +60,15 @@ export function ChannelsPage() {
       name: form.name,
       priority: Number(form.priority || 100),
     };
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("save"),
+      description: editingChannel ? t("confirmUpdateChannel") : t("confirmCreateChannel"),
+      title: editingChannel ? t("confirmUpdateChannelTitle") : t("confirmCreateChannelTitle"),
+    });
+    if (!confirmed) {
+      return;
+    }
     try {
       if (editingChannel) {
         await api.updateChannel("openai-api", editingChannel.name, channel);
@@ -72,6 +83,15 @@ export function ChannelsPage() {
   }
 
   async function probe() {
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("probeModels"),
+      description: t("confirmProbeModels"),
+      title: t("confirmProbeModelsTitle"),
+    });
+    if (!confirmed) {
+      return;
+    }
     try {
       const result = await api.probeModels(form.baseUrl, form.apiKey);
       const uniqueModels = Array.from(new Set(result.models));
@@ -85,6 +105,15 @@ export function ChannelsPage() {
   }
 
   async function checkHealth(name: string) {
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("healthCheck"),
+      description: t("confirmHealthCheck"),
+      title: t("confirmHealthCheckTitle"),
+    });
+    if (!confirmed) {
+      return;
+    }
     try {
       const result = await api.healthCheckChannel("openai-api", name);
       setHealth((current) => ({ ...current, [name]: result }));
@@ -126,8 +155,19 @@ export function ChannelsPage() {
     if (!("base-url" in channel)) {
       return;
     }
+    const willDisable = !channel.disabled;
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: willDisable ? t("disable") : t("enable"),
+      description: willDisable ? t("confirmDisableChannel") : t("confirmEnableChannel"),
+      title: willDisable ? t("confirmDisableChannelTitle") : t("confirmEnableChannelTitle"),
+      tone: willDisable ? "destructive" : "default",
+    });
+    if (!confirmed) {
+      return;
+    }
     try {
-      await api.updateChannel("openai-api", channel.name, { ...channel, disabled: !channel.disabled });
+      await api.updateChannel("openai-api", channel.name, { ...channel, disabled: willDisable });
       await refresh();
     } catch {
       // Global axios interceptor displays the error toast.
@@ -135,8 +175,19 @@ export function ChannelsPage() {
   }
 
   async function toggleOAuthChannel(channel: ChannelsResponse["chatgpt-oauth"][number]) {
+    const willDisable = !channel.disabled;
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: willDisable ? t("disable") : t("enable"),
+      description: willDisable ? t("confirmDisableChannel") : t("confirmEnableChannel"),
+      title: willDisable ? t("confirmDisableChannelTitle") : t("confirmEnableChannelTitle"),
+      tone: willDisable ? "destructive" : "default",
+    });
+    if (!confirmed) {
+      return;
+    }
     try {
-      await api.updateChannel("chatgpt-oauth", channel.name, { ...channel, disabled: !channel.disabled });
+      await api.updateChannel("chatgpt-oauth", channel.name, { ...channel, disabled: willDisable });
       await refresh();
     } catch {
       // Global axios interceptor displays the error toast.
@@ -188,6 +239,7 @@ export function ChannelsPage() {
         <SummaryTile icon={<KeyRound size={16} />} label={t("credentials")} value={summary.credentials} />
         <SummaryTile icon={<Route size={16} />} label={t("mappingCount")} value={summary.mappings} />
       </div>
+      {confirmDialog}
       <Tabs
         onValueChange={(value) => {
           if (value === "openai-api" || value === "chatgpt-oauth") {
@@ -212,6 +264,16 @@ export function ChannelsPage() {
             items={channels["openai-api"]}
             onCheckHealth={checkHealth}
             onDelete={async (name) => {
+              const confirmed = await confirm({
+                cancelLabel: t("cancel"),
+                confirmLabel: t("delete"),
+                description: t("confirmDeleteChannel"),
+                title: t("confirmDeleteChannelTitle"),
+                tone: "destructive",
+              });
+              if (!confirmed) {
+                return;
+              }
               await api.deleteChannel("openai-api", name);
               await refresh();
             }}
@@ -226,6 +288,16 @@ export function ChannelsPage() {
           <ChannelList
             items={channels["chatgpt-oauth"]}
             onDelete={async (name) => {
+              const confirmed = await confirm({
+                cancelLabel: t("cancel"),
+                confirmLabel: t("delete"),
+                description: t("confirmDeleteChannel"),
+                title: t("confirmDeleteChannelTitle"),
+                tone: "destructive",
+              });
+              if (!confirmed) {
+                return;
+              }
               await api.deleteChannel("chatgpt-oauth", name);
               await refresh();
             }}

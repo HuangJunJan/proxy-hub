@@ -1,15 +1,42 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { CopyButton } from "../components/ui/copy-button";
 import { Field } from "../components/ui/field";
-import { Select } from "../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { useAppContext } from "../lib/app-context";
 import type { Language, ThemeMode } from "../lib/types";
+import { useConfirm } from "../components/ui/use-confirm";
 
 export function SettingsPage() {
   const { language, setLanguage, setTheme, t, theme } = useAppContext();
+  const { confirm, confirmDialog } = useConfirm();
+
+  async function changeLanguage(value: Language) {
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("save"),
+      description: t("confirmChangeLanguage"),
+      title: t("confirmChangeLanguageTitle"),
+    });
+    if (confirmed) {
+      setLanguage(value);
+    }
+  }
+
+  async function changeTheme(value: ThemeMode) {
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("save"),
+      description: t("confirmChangeTheme"),
+      title: t("confirmChangeThemeTitle"),
+    });
+    if (confirmed) {
+      setTheme(value);
+    }
+  }
 
   return (
     <section className="settings-grid">
+      {confirmDialog}
       <AccessPanel t={t} />
       <Card>
         <CardHeader>
@@ -17,9 +44,14 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <Field label={t("language")}>
-            <Select value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
-              <option value="zh">中文</option>
-              <option value="en">English</option>
+            <Select value={language} onValueChange={(value) => void changeLanguage(value as Language)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zh">中文</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
             </Select>
           </Field>
         </CardContent>
@@ -30,10 +62,15 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <Field label={t("theme")}>
-            <Select value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}>
-              <option value="system">{t("system")}</option>
-              <option value="light">{t("light")}</option>
-              <option value="dark">{t("dark")}</option>
+            <Select value={theme} onValueChange={(value) => void changeTheme(value as ThemeMode)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="system">{t("system")}</SelectItem>
+                <SelectItem value="light">{t("light")}</SelectItem>
+                <SelectItem value="dark">{t("dark")}</SelectItem>
+              </SelectContent>
             </Select>
           </Field>
         </CardContent>

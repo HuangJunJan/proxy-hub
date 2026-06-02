@@ -4,17 +4,59 @@ import { api } from "../../lib/api";
 import { useAppContext } from "../../lib/app-context";
 import { consoleRoutes, titleForPath } from "../../lib/navigation";
 import type { Language, ThemeMode } from "../../lib/types";
+import { useConfirm } from "../ui/use-confirm";
 import { Button } from "../ui/button";
-import { Select } from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import logoUrl from "../../assets/logo.png";
 
 export function AppShell() {
   const { language, setLanguage, setLoggedOut, setTheme, t, theme, username } = useAppContext();
+  const { confirm, confirmDialog } = useConfirm();
   const location = useLocation();
   const navigate = useNavigate();
   const currentRoute = consoleRoutes.find((item) => item.path === location.pathname);
   const CurrentIcon = currentRoute?.icon;
   const routeTitle = t(titleForPath(location.pathname));
+
+  async function changeLanguage(value: Language) {
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("save"),
+      description: t("confirmChangeLanguage"),
+      title: t("confirmChangeLanguageTitle"),
+    });
+    if (confirmed) {
+      setLanguage(value);
+    }
+  }
+
+  async function changeTheme(value: ThemeMode) {
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("save"),
+      description: t("confirmChangeTheme"),
+      title: t("confirmChangeThemeTitle"),
+    });
+    if (confirmed) {
+      setTheme(value);
+    }
+  }
+
+  async function logout() {
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("logout"),
+      description: t("confirmLogout"),
+      title: t("confirmLogoutTitle"),
+      tone: "destructive",
+    });
+    if (!confirmed) {
+      return;
+    }
+    await api.logout();
+    setLoggedOut();
+    navigate("/login");
+  }
 
   return (
     <div className="layout">
@@ -61,22 +103,28 @@ export function AppShell() {
               <span>{t("gatewayReady")}</span>
             </div>
             <div className="topbar-control-group" aria-label="Display preferences">
-              <Select aria-label="Language" value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
-                <option value="zh">中文</option>
-                <option value="en">English</option>
+              <Select value={language} onValueChange={(value) => void changeLanguage(value as Language)}>
+                <SelectTrigger aria-label="Language">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="zh">中文</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
               </Select>
-              <Select aria-label="Theme" value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}>
-                <option value="system">{t("system")}</option>
-                <option value="light">{t("light")}</option>
-                <option value="dark">{t("dark")}</option>
+              <Select value={theme} onValueChange={(value) => void changeTheme(value as ThemeMode)}>
+                <SelectTrigger aria-label="Theme">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">{t("system")}</SelectItem>
+                  <SelectItem value="light">{t("light")}</SelectItem>
+                  <SelectItem value="dark">{t("dark")}</SelectItem>
+                </SelectContent>
               </Select>
             </div>
             <Button
-              onClick={async () => {
-                await api.logout();
-                setLoggedOut();
-                navigate("/login");
-              }}
+              onClick={() => void logout()}
               type="button"
               variant="outline"
             >
@@ -85,6 +133,7 @@ export function AppShell() {
             </Button>
           </div>
         </header>
+        {confirmDialog}
         <Outlet />
       </main>
     </div>

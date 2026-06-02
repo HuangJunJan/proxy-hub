@@ -1,10 +1,12 @@
-import { ReactNode } from "react";
+import { ReactNode, useId } from "react";
 
 export function Field({ children, label }: { children: ReactNode; label: string }) {
+  const labelId = useId();
+
   return (
-    <label className="ui-field">
-      <span>{label}</span>
+    <div aria-labelledby={labelId} className="ui-field" role="group">
+      <span id={labelId}>{label}</span>
       {children}
-    </label>
+    </div>
   );
 }

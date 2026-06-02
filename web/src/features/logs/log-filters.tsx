@@ -2,7 +2,7 @@ import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { Field } from "../../components/ui/field";
 import { Input } from "../../components/ui/input";
-import { Select } from "../../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 
 export interface LogFilters {
   channel: string;
@@ -53,17 +53,27 @@ export function LogFiltersCard({
             <Input value={filters.endpoint} onChange={(event) => onChange("endpoint", event.target.value)} />
           </Field>
           <Field label={t("requestType")}>
-            <Select value={filters.requestType} onChange={(event) => onChange("requestType", event.target.value)}>
-              <option value="">{t("all")}</option>
-              <option value="chat.completions">chat.completions</option>
-              <option value="responses">responses</option>
+            <Select value={filters.requestType || "all"} onValueChange={(value) => onChange("requestType", value === "all" ? "" : value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("all")}</SelectItem>
+                <SelectItem value="chat.completions">chat.completions</SelectItem>
+                <SelectItem value="responses">responses</SelectItem>
+              </SelectContent>
             </Select>
           </Field>
           <Field label={t("statusGroup")}>
-            <Select value={filters.statusClass} onChange={(event) => onChange("statusClass", event.target.value)}>
-              <option value="">{t("all")}</option>
-              <option value="success">{t("successOnly")}</option>
-              <option value="error">{t("errorsOnly")}</option>
+            <Select value={filters.statusClass || "all"} onValueChange={(value) => onChange("statusClass", value === "all" ? "" : value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("all")}</SelectItem>
+                <SelectItem value="success">{t("successOnly")}</SelectItem>
+                <SelectItem value="error">{t("errorsOnly")}</SelectItem>
+              </SelectContent>
             </Select>
           </Field>
           <Field label={t("statusCode")}>

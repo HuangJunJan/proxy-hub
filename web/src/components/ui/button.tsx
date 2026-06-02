@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { ButtonHTMLAttributes, forwardRef } from "react";
 import { cn } from "../../lib/cn";
 
-const buttonVariants = cva("ui-button", {
+export const buttonVariants = cva("ui-button", {
   defaultVariants: {
     size: "default",
     variant: "default",

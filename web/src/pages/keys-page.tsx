@@ -13,9 +13,11 @@ import { KeyTable } from "../features/keys/key-table";
 import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import type { DownstreamKey } from "../lib/types";
+import { useConfirm } from "../components/ui/use-confirm";
 
 export function KeysPage() {
   const { t } = useAppContext();
+  const { confirm, confirmDialog } = useConfirm();
   const [created, setCreated] = useState("");
   const [editingKey, setEditingKey] = useState<DownstreamKey | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -37,6 +39,15 @@ export function KeysPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: editingKey ? t("save") : t("createKey"),
+      description: editingKey ? t("confirmUpdateKey") : t("confirmCreateKey"),
+      title: editingKey ? t("confirmUpdateKeyTitle") : t("confirmCreateKeyTitle"),
+    });
+    if (!confirmed) {
+      return;
+    }
     try {
       if (editingKey) {
         await api.updateKey(keyIdentifier(editingKey), { name, notes });
@@ -73,8 +84,38 @@ export function KeysPage() {
   }
 
   async function toggleKey(key: DownstreamKey) {
+    const willDisable = !key.disabled;
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: willDisable ? t("disable") : t("enable"),
+      description: willDisable ? t("confirmDisableKey") : t("confirmEnableKey"),
+      title: willDisable ? t("confirmDisableKeyTitle") : t("confirmEnableKeyTitle"),
+      tone: willDisable ? "destructive" : "default",
+    });
+    if (!confirmed) {
+      return;
+    }
     try {
-      await api.updateKey(keyIdentifier(key), { disabled: !key.disabled });
+      await api.updateKey(keyIdentifier(key), { disabled: willDisable });
+      await refresh();
+    } catch {
+      // Global axios interceptor displays the error toast.
+    }
+  }
+
+  async function deleteKey(key: DownstreamKey) {
+    const confirmed = await confirm({
+      cancelLabel: t("cancel"),
+      confirmLabel: t("delete"),
+      description: t("confirmDeleteKey"),
+      title: t("confirmDeleteKeyTitle"),
+      tone: "destructive",
+    });
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await api.deleteKey(keyIdentifier(key));
       await refresh();
     } catch {
       // Global axios interceptor displays the error toast.
@@ -121,9 +162,10 @@ export function KeysPage() {
       />
       <Card>
         <CardContent>
-          <KeyTable keys={keys} onEdit={startEdit} onToggle={(key) => void toggleKey(key)} t={t} />
+          <KeyTable keys={keys} onDelete={(key) => void deleteKey(key)} onEdit={startEdit} onToggle={(key) => void toggleKey(key)} t={t} />
         </CardContent>
       </Card>
+      {confirmDialog}
       <Dialog onClose={() => setCreated("")} open={Boolean(created)} title={t("token")}>
         <div className="form-stack">
           <p className="hint-text">{t("tokenUsageHint")}</p>

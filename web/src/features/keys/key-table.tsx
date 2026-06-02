@@ -1,3 +1,4 @@
+import { Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { CopyButton } from "../../components/ui/copy-button";
 import { DataTable } from "../../components/ui/data-table";
@@ -5,11 +6,13 @@ import type { DownstreamKey } from "../../lib/types";
 
 export function KeyTable({
   keys,
+  onDelete,
   onEdit,
   onToggle,
   t,
 }: {
   keys: DownstreamKey[];
+  onDelete: (key: DownstreamKey) => void;
   onEdit: (key: DownstreamKey) => void;
   onToggle: (key: DownstreamKey) => void;
   t: (key: string) => string;
@@ -32,6 +35,10 @@ export function KeyTable({
           </Button>
           <Button onClick={() => onToggle(key)} size="sm" type="button" variant="outline">
             {key.disabled ? t("enable") : t("disable")}
+          </Button>
+          <Button onClick={() => onDelete(key)} size="sm" type="button" variant="destructive">
+            <Trash2 size={14} />
+            {t("delete")}
           </Button>
         </div>,
       ])}
