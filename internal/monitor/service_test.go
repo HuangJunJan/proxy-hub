@@ -53,21 +53,6 @@ func TestSubmitFlushesLogsAndStats(t *testing.T) {
 	}
 }
 
-func TestHubPublishesToSubscribers(t *testing.T) {
-	hub := NewHub(1)
-	ch, cancel := hub.Subscribe()
-	defer cancel()
-	hub.Publish(store.LogEntry{ChannelName: "openai"})
-	select {
-	case got := <-ch:
-		if got.ChannelName != "openai" {
-			t.Fatalf("ChannelName = %q", got.ChannelName)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for published entry")
-	}
-}
-
 func TestCleanupOnceDeletesExpiredLogs(t *testing.T) {
 	ctx := context.Background()
 	db, err := store.OpenSQLite(ctx, filepath.Join(t.TempDir(), "proxy-hub.db"), nil)

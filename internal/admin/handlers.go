@@ -554,13 +554,8 @@ func (h *Handler) listLogs(c *gin.Context) {
 	}
 	filter := store.QueryFilter{
 		ChannelName: c.Query("channel"),
-		APIKey:      c.Query("apiKey"),
 		Model:       c.Query("model"),
-		Endpoint:    c.Query("endpoint"),
-		RequestType: c.Query("requestType"),
-		ErrorKind:   c.Query("errorKind"),
-		StatusClass: c.Query("statusClass"),
-		StatusCode:  queryInt(c, "status"),
+		Status:      c.Query("status"),
 		StartMS:     queryInt64(c, "from"),
 		EndMS:       queryInt64(c, "to"),
 		Limit:       queryInt(c, "limit"),

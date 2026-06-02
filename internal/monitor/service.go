@@ -2,14 +2,9 @@ package monitor
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
-	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/gin-gonic/gin"
 
 	"proxy-hub/internal/store"
 )
@@ -19,8 +14,7 @@ type Service struct {
 	statsRepo store.StatsRepo
 	logger    *slog.Logger
 
-	entries chan store.LogEntry
-	hub     *Hub
+	entries  chan store.LogEntry
 	dropped atomic.Uint64
 }
 
@@ -48,7 +42,6 @@ func NewService(logRepo store.RequestLogRepo, statsRepo store.StatsRepo, logger 
 		statsRepo: statsRepo,
 		logger:    logger,
 		entries:   make(chan store.LogEntry, opts.BufferSize),
-		hub:       NewHub(128),
 	}
 }
 
@@ -138,7 +131,6 @@ func (s *Service) Submit(entry store.LogEntry) {
 	if entry.Attempts == 0 {
 		entry.Attempts = 1
 	}
-	s.hub.Publish(entry)
 	select {
 	case s.entries <- entry:
 	default:
@@ -149,61 +141,6 @@ func (s *Service) Submit(entry store.LogEntry) {
 
 func (s *Service) Dropped() uint64 {
 	return s.dropped.Load()
-}
-
-func (s *Service) Stream(c *gin.Context) {
-	ch, cancel := s.hub.Subscribe()
-	defer cancel()
-
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Status(http.StatusOK)
-	flusher, _ := c.Writer.(http.Flusher)
-	if _, err := c.Writer.Write([]byte(": connected\n\n")); err != nil {
-		return
-	}
-	if flusher != nil {
-		flusher.Flush()
-	}
-
-	heartbeat := time.NewTicker(15 * time.Second)
-	defer heartbeat.Stop()
-
-	for {
-		select {
-		case <-c.Request.Context().Done():
-			return
-		case <-heartbeat.C:
-			if _, err := c.Writer.Write([]byte(": heartbeat\n\n")); err != nil {
-				return
-			}
-			if flusher != nil {
-				flusher.Flush()
-			}
-		case entry := <-ch:
-			data, err := json.Marshal(entry)
-			if err != nil {
-				s.logger.Warn("failed to encode sse request log", "error", err)
-				continue
-			}
-			if _, err := c.Writer.Write([]byte("event: request\n")); err != nil {
-				return
-			}
-			if _, err := c.Writer.Write([]byte("data: ")); err != nil {
-				return
-			}
-			if _, err := c.Writer.Write(data); err != nil {
-				return
-			}
-			if _, err := c.Writer.Write([]byte("\n\n")); err != nil {
-				return
-			}
-			if flusher != nil {
-				flusher.Flush()
-			}
-		}
-	}
 }
 
 func (s *Service) flushBatch(ctx context.Context, batch []store.LogEntry) error {
@@ -256,42 +193,4 @@ func aggregateHourly(entries []store.LogEntry) []store.HourlyDelta {
 		out = append(out, delta)
 	}
 	return out
-}
-
-type Hub struct {
-	mu         sync.RWMutex
-	bufferSize int
-	subs       map[chan store.LogEntry]struct{}
-}
-
-func NewHub(bufferSize int) *Hub {
-	if bufferSize <= 0 {
-		bufferSize = 64
-	}
-	return &Hub{bufferSize: bufferSize, subs: map[chan store.LogEntry]struct{}{}}
-}
-
-func (h *Hub) Subscribe() (<-chan store.LogEntry, func()) {
-	ch := make(chan store.LogEntry, h.bufferSize)
-	h.mu.Lock()
-	h.subs[ch] = struct{}{}
-	h.mu.Unlock()
-	cancel := func() {
-		h.mu.Lock()
-		delete(h.subs, ch)
-		close(ch)
-		h.mu.Unlock()
-	}
-	return ch, cancel
-}
-
-func (h *Hub) Publish(entry store.LogEntry) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for ch := range h.subs {
-		select {
-		case ch <- entry:
-		default:
-		}
-	}
 }

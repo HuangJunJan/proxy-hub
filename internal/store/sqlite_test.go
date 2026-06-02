@@ -85,14 +85,14 @@ func TestRequestLogRepository(t *testing.T) {
 		t.Fatalf("ReasoningTokens = %v, want 4", first.ReasoningTokens)
 	}
 
-	filtered, err := store.Query(ctx, QueryFilter{APIKey: "local", Model: "gpt-4o", Endpoint: "chat", RequestType: "chat.completions", StatusClass: "success"})
+	filtered, err := store.Query(ctx, QueryFilter{Model: "gpt-4o", Status: "success"})
 	if err != nil {
 		t.Fatalf("Query(filtered) error = %v", err)
 	}
 	if len(filtered) != 1 || filtered[0].ChannelName != "openai" {
 		t.Fatalf("Query(filtered) = %+v, want openai log", filtered)
 	}
-	filtered, err = store.Query(ctx, QueryFilter{ErrorKind: "upstream", StatusClass: "error"})
+	filtered, err = store.Query(ctx, QueryFilter{ChannelName: "deepseek", Status: "error"})
 	if err != nil {
 		t.Fatalf("Query(error filtered) error = %v", err)
 	}

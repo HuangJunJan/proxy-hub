@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -99,37 +100,23 @@ func (s *SQLiteStore) Query(ctx context.Context, filter QueryFilter) ([]LogEntry
 		query.WriteString(" AND channel_name = ?")
 		args = append(args, filter.ChannelName)
 	}
-	if filter.APIKey != "" {
-		query.WriteString(" AND (api_key_name LIKE ? OR api_key_token_mask LIKE ?)")
-		value := "%" + filter.APIKey + "%"
-		args = append(args, value, value)
-	}
 	if filter.Model != "" {
 		query.WriteString(" AND (downstream_model LIKE ? OR upstream_model LIKE ?)")
 		value := "%" + filter.Model + "%"
 		args = append(args, value, value)
 	}
-	if filter.Endpoint != "" {
-		query.WriteString(" AND endpoint LIKE ?")
-		args = append(args, "%"+filter.Endpoint+"%")
-	}
-	if filter.RequestType != "" {
-		query.WriteString(" AND request_type = ?")
-		args = append(args, filter.RequestType)
-	}
-	if filter.ErrorKind != "" {
-		query.WriteString(" AND error_kind LIKE ?")
-		args = append(args, "%"+filter.ErrorKind+"%")
-	}
-	if filter.StatusCode != 0 {
-		query.WriteString(" AND status_code = ?")
-		args = append(args, filter.StatusCode)
-	}
-	switch filter.StatusClass {
-	case "success":
-		query.WriteString(" AND status_code >= 200 AND status_code < 400")
-	case "error":
-		query.WriteString(" AND status_code >= 400")
+	if status := strings.TrimSpace(filter.Status); status != "" {
+		switch strings.ToLower(status) {
+		case "success":
+			query.WriteString(" AND status_code >= 200 AND status_code < 400")
+		case "error":
+			query.WriteString(" AND status_code >= 400")
+		default:
+			if code, err := strconv.Atoi(status); err == nil {
+				query.WriteString(" AND status_code = ?")
+				args = append(args, code)
+			}
+		}
 	}
 	if filter.StartMS != 0 {
 		query.WriteString(" AND ts >= ?")

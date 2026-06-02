@@ -46,13 +46,8 @@ type LogEntry struct {
 
 type QueryFilter struct {
 	ChannelName string
-	APIKey      string
 	Model       string
-	Endpoint    string
-	RequestType string
-	ErrorKind   string
-	StatusClass string
-	StatusCode  int
+	Status      string
 	StartMS     int64
 	EndMS       int64
 	Limit       int

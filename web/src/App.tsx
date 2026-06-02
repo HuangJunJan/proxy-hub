@@ -13,7 +13,6 @@ import { ChatPage } from "./pages/chat-page";
 import { ChannelsPage } from "./pages/channels-page";
 import { DashboardPage } from "./pages/dashboard-page";
 import { KeysPage } from "./pages/keys-page";
-import { LivePage } from "./pages/live-page";
 import { LoginPage } from "./pages/login-page";
 import { LogsPage } from "./pages/logs-page";
 import { SettingsPage } from "./pages/settings-page";
@@ -116,7 +115,6 @@ export function App() {
             <Route element={<ChatPage />} path="chat" />
             <Route element={<KeysPage />} path="keys" />
             <Route element={<LogsPage />} path="logs" />
-            <Route element={<LivePage />} path="live" />
             <Route element={<SettingsPage />} path="settings" />
             <Route element={<Navigate replace to="/dashboard" />} path="*" />
           </Route>

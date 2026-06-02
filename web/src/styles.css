@@ -199,9 +199,15 @@ svg {
 }
 
 .layout {
+  --sidebar-width: 244px;
+  --topbar-height: 84px;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+
+.layout.sidebar-collapsed {
+  --sidebar-width: 76px;
 }
 
 .sidebar {
@@ -215,6 +221,8 @@ svg {
   background: color-mix(in srgb, var(--panel) 94%, var(--bg));
   padding: 18px 14px;
   z-index: 30;
+  overflow: hidden;
+  transition: width 180ms ease, padding 180ms ease;
 }
 
 .brand {
@@ -247,6 +255,10 @@ svg {
   object-fit: contain;
 }
 
+.brand-copy {
+  min-width: 0;
+}
+
 .brand strong,
 .brand span {
   display: block;
@@ -262,6 +274,14 @@ svg {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.25;
+}
+
+.layout.sidebar-collapsed .brand {
+  justify-content: center;
+}
+
+.layout.sidebar-collapsed .brand-copy {
+  display: none;
 }
 
 .sidebar-nav {
@@ -309,12 +329,29 @@ svg {
   color: inherit;
 }
 
+.layout.sidebar-collapsed .nav-item {
+  justify-content: center;
+  padding-inline: 0;
+  font-size: 0;
+}
+
+.layout.sidebar-collapsed .nav-item .nav-icon {
+  width: auto;
+}
+
 .workspace {
   min-width: 0;
+  min-height: 100vh;
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
   align-content: start;
-  gap: 22px;
   padding: 0 28px 28px;
+}
+
+.workspace-content {
+  min-width: 0;
+  min-height: calc(100vh - var(--topbar-height));
+  padding-top: var(--topbar-height);
 }
 
 .topbar,
@@ -327,12 +364,19 @@ svg {
 }
 
 .topbar {
-  width: 100%;
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: var(--sidebar-width);
+  width: auto;
   justify-content: space-between;
   min-height: 70px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 88%, var(--panel));
-  padding: 14px 0;
+  backdrop-filter: blur(12px);
+  padding: 14px 28px;
+  z-index: 40;
+  transition: left 180ms ease;
 }
 
 .topbar-title {
@@ -340,6 +384,10 @@ svg {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.sidebar-toggle {
+  flex: 0 0 auto;
 }
 
 .topbar-subtitle {
@@ -442,6 +490,30 @@ svg {
 .stack {
   display: grid;
   gap: 18px;
+}
+
+.logs-page {
+  min-height: calc(100vh - 116px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.logs-table-card,
+.logs-table-card .ui-card-content,
+.logs-table-fill {
+  min-height: 0;
+}
+
+.logs-table-card {
+  overflow: hidden;
+}
+
+.logs-table-card .ui-card-content {
+  height: 100%;
+}
+
+.logs-table-fill {
+  height: 100%;
 }
 
 .split-view {
@@ -846,6 +918,10 @@ svg {
   box-shadow: var(--shadow);
 }
 
+.logs-table-fill.ui-table-wrap {
+  height: 100%;
+}
+
 .ui-table {
   width: 100%;
   border-collapse: collapse;
@@ -917,6 +993,10 @@ svg {
   gap: 12px;
 }
 
+.log-filter-grid.compact {
+  grid-template-columns: repeat(4, minmax(148px, 1fr));
+}
+
 .log-filter-actions {
   display: flex;
   justify-content: flex-end;
@@ -924,7 +1004,7 @@ svg {
 }
 
 .request-log-table {
-  min-width: 1480px;
+  min-width: 860px;
 }
 
 .request-log-table th,
@@ -1787,17 +1867,6 @@ svg {
   color: var(--text);
 }
 
-.live-badge {
-  min-height: 38px;
-}
-
-.live-badge.is-live::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--success);
-}
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -1840,22 +1909,40 @@ svg {
 }
 
 @media (max-width: 900px) {
-  .layout {
+  .layout,
+  .layout.sidebar-collapsed {
+    --sidebar-width: 1fr;
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
+  .sidebar,
+  .layout.sidebar-collapsed .sidebar {
     position: static;
     height: auto;
     gap: 14px;
     border-right: 0;
     border-bottom: 1px solid var(--border);
     padding: 14px;
+    overflow: visible;
+  }
+
+  .layout.sidebar-collapsed .brand-copy {
+    display: block;
+  }
+
+  .layout.sidebar-collapsed .nav-item {
+    justify-content: flex-start;
+    padding-inline: 10px;
+    font-size: 13px;
   }
 
   .workspace {
     padding: 0 18px 18px;
-    gap: 18px;
+  }
+
+  .workspace-content {
+    min-height: auto;
+    padding-top: calc(var(--topbar-height) + 8px);
   }
 
   .channel-summary-grid,
@@ -1902,8 +1989,9 @@ svg {
   }
 
   .topbar {
+    left: 0;
     min-height: auto;
-    padding: 14px 0;
+    padding: 14px 18px;
   }
 
   .ui-sheet-content {

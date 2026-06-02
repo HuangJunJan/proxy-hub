@@ -6,13 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 
 export interface LogFilters {
   channel: string;
-  apiKey: string;
   model: string;
-  endpoint: string;
-  requestType: string;
-  statusClass: string;
   status: string;
-  errorKind: string;
   from: string;
   to: string;
 }
@@ -22,12 +17,20 @@ export function LogFiltersCard({
   onApply,
   onChange,
   onClear,
+  onRefreshIntervalChange,
+  refreshIntervalMs,
+  refreshIntervalLabel,
+  refreshOptionsMs,
   t,
 }: {
   filters: LogFilters;
   onApply: () => void;
   onChange: (name: keyof LogFilters, value: string) => void;
   onClear: () => void;
+  onRefreshIntervalChange: (value: number) => void;
+  refreshIntervalMs: number;
+  refreshIntervalLabel: string;
+  refreshOptionsMs: readonly number[];
   t: (key: string) => string;
 }) {
   return (
@@ -39,33 +42,15 @@ export function LogFiltersCard({
             <span>{t("logFilterHint")}</span>
           </div>
         </div>
-        <div className="log-filter-grid">
+        <div className="log-filter-grid compact">
           <Field label={t("channelName")}>
             <Input value={filters.channel} onChange={(event) => onChange("channel", event.target.value)} />
-          </Field>
-          <Field label={t("apiKeyShort")}>
-            <Input value={filters.apiKey} onChange={(event) => onChange("apiKey", event.target.value)} />
           </Field>
           <Field label={t("model")}>
             <Input value={filters.model} onChange={(event) => onChange("model", event.target.value)} />
           </Field>
-          <Field label={t("endpoint")}>
-            <Input value={filters.endpoint} onChange={(event) => onChange("endpoint", event.target.value)} />
-          </Field>
-          <Field label={t("requestType")}>
-            <Select value={filters.requestType || "all"} onValueChange={(value) => onChange("requestType", value === "all" ? "" : value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("all")}</SelectItem>
-                <SelectItem value="chat.completions">chat.completions</SelectItem>
-                <SelectItem value="responses">responses</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label={t("statusGroup")}>
-            <Select value={filters.statusClass || "all"} onValueChange={(value) => onChange("statusClass", value === "all" ? "" : value)}>
+          <Field label={t("status")}>
+            <Select value={filters.status || "all"} onValueChange={(value) => onChange("status", value === "all" ? "" : value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -76,11 +61,19 @@ export function LogFiltersCard({
               </SelectContent>
             </Select>
           </Field>
-          <Field label={t("statusCode")}>
-            <Input inputMode="numeric" value={filters.status} onChange={(event) => onChange("status", event.target.value)} />
-          </Field>
-          <Field label={t("errorKind")}>
-            <Input value={filters.errorKind} onChange={(event) => onChange("errorKind", event.target.value)} />
+          <Field label={t("autoRefresh")}>
+            <Select value={String(refreshIntervalMs)} onValueChange={(value) => onRefreshIntervalChange(Number(value))}>
+              <SelectTrigger>
+                <SelectValue>{refreshIntervalLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {refreshOptionsMs.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {Math.round(option / 1000)}s
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label={t("fromTime")}>
             <Input type="datetime-local" value={filters.from} onChange={(event) => onChange("from", event.target.value)} />

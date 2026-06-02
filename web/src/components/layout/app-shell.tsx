@@ -1,5 +1,6 @@
-import { Activity, LogOut } from "lucide-react";
+import { Activity, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { api } from "../../lib/api";
 import { useAppContext } from "../../lib/app-context";
 import { consoleRoutes, titleForPath } from "../../lib/navigation";
@@ -11,6 +12,7 @@ import logoUrl from "../../assets/logo.png";
 
 export function AppShell() {
   const { language, setLanguage, setLoggedOut, setTheme, t, theme, username } = useAppContext();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,13 +61,13 @@ export function AppShell() {
   }
 
   return (
-    <div className="layout">
+    <div className={sidebarCollapsed ? "layout sidebar-collapsed" : "layout"}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
             <img alt="" aria-hidden="true" className="brand-logo" src={logoUrl} />
           </div>
-          <div>
+          <div className="brand-copy">
             <strong>{t("appName")}</strong>
             <span>{username}</span>
           </div>
@@ -87,6 +89,16 @@ export function AppShell() {
       <main className="workspace">
         <header className="topbar">
           <div className="topbar-title">
+            <Button
+              aria-label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+              className="sidebar-toggle"
+              onClick={() => setSidebarCollapsed((value) => !value)}
+              size="icon"
+              type="button"
+              variant="outline"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </Button>
             {CurrentIcon && (
               <span className="topbar-icon" aria-hidden="true">
                 <CurrentIcon size={18} />
@@ -134,7 +146,9 @@ export function AppShell() {
           </div>
         </header>
         {confirmDialog}
-        <Outlet />
+        <div className="workspace-content">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

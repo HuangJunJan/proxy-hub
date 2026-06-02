@@ -277,6 +277,17 @@ func TestAdminLogsAndStats(t *testing.T) {
 		t.Fatalf("logs response missing channel: %s", rec.Body.String())
 	}
 
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/logs?status=success", nil)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("logs success filter status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"statusCode":200`)) {
+		t.Fatalf("logs success filter missing 200 entry: %s", rec.Body.String())
+	}
+
 	req = httptest.NewRequest(http.MethodGet, "/api/admin/stats/channels?window=24h", nil)
 	req.AddCookie(cookie)
 	rec = httptest.NewRecorder()

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import { Toolbar } from "../components/ui/toolbar";
 import { LogFiltersCard, type LogFilters } from "../features/logs/log-filters";
@@ -8,35 +8,27 @@ import { useAppContext } from "../lib/app-context";
 import type { LogsResponse } from "../lib/types";
 
 const LOG_LIMIT = "100";
-
-const emptyFilters: LogFilters = {
-  channel: "",
-  apiKey: "",
-  model: "",
-  endpoint: "",
-  requestType: "",
-  statusClass: "",
-  status: "",
-  errorKind: "",
-  from: "",
-  to: "",
-};
+const DEFAULT_REFRESH_MS = 5000;
+const REFRESH_OPTIONS_MS = [5000, 10000, 30000, 60000] as const;
 
 export function LogsPage() {
   const { t } = useAppContext();
-  const [filters, setFilters] = useState<LogFilters>(emptyFilters);
+  const [filters, setFilters] = useState<LogFilters>(() => createTodayFilters());
+  const [refreshMs, setRefreshMs] = useState(DEFAULT_REFRESH_MS);
   const [logs, setLogs] = useState<LogsResponse>({ items: [], limit: 100, page: 1 });
+  const filtersRef = useRef(filters);
 
-  async function refresh(nextFilters = filters) {
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  const refreshLabel = useMemo(() => formatRefreshLabel(refreshMs, t), [refreshMs, t]);
+
+  async function refresh(nextFilters = filtersRef.current) {
     const params = new URLSearchParams();
     appendTextParam(params, "channel", nextFilters.channel);
-    appendTextParam(params, "apiKey", nextFilters.apiKey);
     appendTextParam(params, "model", nextFilters.model);
-    appendTextParam(params, "endpoint", nextFilters.endpoint);
-    appendTextParam(params, "requestType", nextFilters.requestType);
-    appendTextParam(params, "statusClass", nextFilters.statusClass);
     appendTextParam(params, "status", nextFilters.status);
-    appendTextParam(params, "errorKind", nextFilters.errorKind);
     appendTimeParam(params, "from", nextFilters.from);
     appendTimeParam(params, "to", nextFilters.to);
     params.set("limit", LOG_LIMIT);
@@ -48,29 +40,72 @@ export function LogsPage() {
   }
 
   useEffect(() => {
-    void refresh();
+    void refresh(filters);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, refreshMs);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [refreshMs]);
 
   function updateFilter(name: keyof LogFilters, value: string) {
     setFilters((current) => ({ ...current, [name]: value }));
   }
 
   function clearFilters() {
-    setFilters(emptyFilters);
-    void refresh(emptyFilters);
+    const next = createTodayFilters();
+    setFilters(next);
+    void refresh(next);
   }
 
   return (
-    <section className="stack">
+    <section className="stack logs-page">
       <Toolbar onRefresh={() => void refresh()} refreshLabel={t("refresh")} title={t("logs")} />
-      <LogFiltersCard filters={filters} onApply={() => void refresh()} onChange={updateFilter} onClear={clearFilters} t={t} />
-      <Card>
+      <LogFiltersCard
+        filters={filters}
+        onApply={() => void refresh()}
+        onChange={updateFilter}
+        onClear={clearFilters}
+        onRefreshIntervalChange={setRefreshMs}
+        refreshIntervalMs={refreshMs}
+        refreshIntervalLabel={refreshLabel}
+        refreshOptionsMs={REFRESH_OPTIONS_MS}
+        t={t}
+      />
+      <Card className="logs-table-card">
         <CardContent>
-          <LogTable logs={logs.items} t={t} />
+          <LogTable className="logs-table-fill" logs={logs.items} t={t} />
         </CardContent>
       </Card>
     </section>
   );
+}
+
+function createTodayFilters(): LogFilters {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  return {
+    channel: "",
+    model: "",
+    status: "",
+    from: toDateTimeLocal(start),
+    to: toDateTimeLocal(end),
+  };
+}
+
+function toDateTimeLocal(value: Date) {
+  const offset = value.getTimezoneOffset();
+  const local = new Date(value.getTime() - offset * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function formatRefreshLabel(refreshMs: number, t: (key: string) => string) {
+  return `${t("autoRefresh")}: ${Math.round(refreshMs / 1000)}s`;
 }
 
 function appendTextParam(params: URLSearchParams, key: string, value: string) {
