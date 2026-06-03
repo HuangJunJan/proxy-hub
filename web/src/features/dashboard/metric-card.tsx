@@ -1,13 +1,20 @@
-import { Card, CardContent } from "../../components/ui/card";
-import { cn } from "../../lib/cn";
+import { StatTile } from "../../components/ui/stat-tile";
 
-export function MetricCard({ label, tone, value }: { label: string; tone?: "good" | "bad"; value: number }) {
+export function MetricCard({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone?: "good" | "bad";
+  value: number;
+}) {
   return (
-    <Card className={cn("metric", tone)}>
-      <CardContent>
-        <span>{label}</span>
-        <strong>{value.toLocaleString()}</strong>
-      </CardContent>
-    </Card>
+    <StatTile
+      className="metric-tile"
+      label={label}
+      tone={tone === "good" ? "success" : tone === "bad" ? "danger" : undefined}
+      value={value.toLocaleString()}
+    />
   );
 }

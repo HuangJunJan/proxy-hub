@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent } from "../components/ui/card";
-import { Toolbar } from "../components/ui/toolbar";
+import {
+  Page,
+  PageBody,
+  PageDescription,
+  PageHeader,
+  PageTitle,
+} from "../components/layout/page";
+import { PageActions, RefreshButton } from "../components/ui/page-actions";
+import { SectionCard } from "../components/ui/section-card";
 import { LogFiltersCard, type LogFilters } from "../features/logs/log-filters";
 import { LogTable } from "../features/logs/log-table";
 import { api } from "../lib/api";
@@ -13,16 +20,25 @@ const REFRESH_OPTIONS_MS = [5000, 10000, 30000, 60000] as const;
 
 export function LogsPage() {
   const { t } = useAppContext();
-  const [filters, setFilters] = useState<LogFilters>(() => createTodayFilters());
+  const [filters, setFilters] = useState<LogFilters>(() =>
+    createTodayFilters(),
+  );
   const [refreshMs, setRefreshMs] = useState(DEFAULT_REFRESH_MS);
-  const [logs, setLogs] = useState<LogsResponse>({ items: [], limit: 100, page: 1 });
+  const [logs, setLogs] = useState<LogsResponse>({
+    items: [],
+    limit: 100,
+    page: 1,
+  });
   const filtersRef = useRef(filters);
 
   useEffect(() => {
     filtersRef.current = filters;
   }, [filters]);
 
-  const refreshLabel = useMemo(() => formatRefreshLabel(refreshMs, t), [refreshMs, t]);
+  const refreshLabel = useMemo(
+    () => formatRefreshLabel(refreshMs, t),
+    [refreshMs, t],
+  );
 
   async function refresh(nextFilters = filtersRef.current) {
     const params = new URLSearchParams();
@@ -63,25 +79,38 @@ export function LogsPage() {
   }
 
   return (
-    <section className="stack logs-page">
-      <Toolbar onRefresh={() => void refresh()} refreshLabel={t("refresh")} title={t("logs")} />
-      <LogFiltersCard
-        filters={filters}
-        onApply={() => void refresh()}
-        onChange={updateFilter}
-        onClear={clearFilters}
-        onRefreshIntervalChange={setRefreshMs}
-        refreshIntervalMs={refreshMs}
-        refreshIntervalLabel={refreshLabel}
-        refreshOptionsMs={REFRESH_OPTIONS_MS}
-        t={t}
-      />
-      <Card className="logs-table-card">
-        <CardContent>
+    <Page className="logs-page">
+      <PageHeader
+        actions={
+          <PageActions>
+            <RefreshButton label={t("refresh")} onClick={refresh} />
+          </PageActions>
+        }
+      >
+        <PageTitle visuallyHidden>{t("logs")}</PageTitle>
+        <PageDescription>{refreshLabel}</PageDescription>
+      </PageHeader>
+      <PageBody>
+        <LogFiltersCard
+          filters={filters}
+          onApply={() => void refresh()}
+          onChange={updateFilter}
+          onClear={clearFilters}
+          onRefreshIntervalChange={setRefreshMs}
+          refreshIntervalMs={refreshMs}
+          refreshIntervalLabel={refreshLabel}
+          refreshOptionsMs={REFRESH_OPTIONS_MS}
+          t={t}
+        />
+        <SectionCard
+          className="logs-table-card"
+          description={`${logs.items.length.toLocaleString()} ${t("requests")}`}
+          title={t("logs")}
+        >
           <LogTable className="logs-table-fill" logs={logs.items} t={t} />
-        </CardContent>
-      </Card>
-    </section>
+        </SectionCard>
+      </PageBody>
+    </Page>
   );
 }
 

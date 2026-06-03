@@ -1,8 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ScreenCenter } from "../components/screen-center";
+import { AuthScreen } from "../components/layout/auth-screen";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { CopyButton } from "../components/ui/copy-button";
 import { Dialog } from "../components/ui/dialog";
 import { Field } from "../components/ui/field";
@@ -28,35 +27,37 @@ export function SetupPage() {
   }
 
   return (
-    <ScreenCenter>
-      <Card className="auth-panel">
-        <CardHeader>
-          <CardTitle>{t("setupTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="form-stack" onSubmit={submit}>
-            <Field label={t("setupUsername")}>
-              <Input value={username} onChange={(event) => setUsername(event.target.value)} />
-            </Field>
-            <Field label={t("setupPassword")}>
-              <Input
-                minLength={6}
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </Field>
-            <Button disabled={Boolean(token)} type="submit">
-              {t("setupSubmit")}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <>
+      <AuthScreen description={t("tokenUsageHint")} title={t("setupTitle")}>
+        <form className="form-stack" onSubmit={submit}>
+          <Field label={t("setupUsername")}>
+            <Input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            />
+          </Field>
+          <Field label={t("setupPassword")}>
+            <Input
+              minLength={6}
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </Field>
+          <Button disabled={Boolean(token)} type="submit">
+            {t("setupSubmit")}
+          </Button>
+        </form>
+      </AuthScreen>
       <Dialog open={Boolean(token)} title={t("setupToken")}>
         <div className="form-stack">
           <p className="hint-text">{t("tokenUsageHint")}</p>
           <code className="token-box">{token}</code>
-          <CopyButton copiedLabel={t("copied")} label={t("copy")} value={token} />
+          <CopyButton
+            copiedLabel={t("copied")}
+            label={t("copy")}
+            value={token}
+          />
           <Button
             onClick={() => {
               setAuthenticated(username);
@@ -68,6 +69,6 @@ export function SetupPage() {
           </Button>
         </div>
       </Dialog>
-    </ScreenCenter>
+    </>
   );
 }

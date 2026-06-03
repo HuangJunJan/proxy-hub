@@ -1,8 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ScreenCenter } from "../components/screen-center";
+import { AuthScreen } from "../components/layout/auth-screen";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
 import { api } from "../lib/api";
@@ -26,23 +25,23 @@ export function LoginPage() {
   }
 
   return (
-    <ScreenCenter>
-      <Card className="auth-panel">
-        <CardHeader>
-          <CardTitle>{t("loginTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="form-stack" onSubmit={submit}>
-            <Field label={t("setupUsername")}>
-              <Input value={username} onChange={(event) => setUsername(event.target.value)} />
-            </Field>
-            <Field label={t("setupPassword")}>
-              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-            </Field>
-            <Button type="submit">{t("loginSubmit")}</Button>
-          </form>
-        </CardContent>
-      </Card>
-    </ScreenCenter>
+    <AuthScreen title={t("loginTitle")}>
+      <form className="form-stack" onSubmit={submit}>
+        <Field label={t("setupUsername")}>
+          <Input
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+          />
+        </Field>
+        <Field label={t("setupPassword")}>
+          <Input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </Field>
+        <Button type="submit">{t("loginSubmit")}</Button>
+      </form>
+    </AuthScreen>
   );
 }

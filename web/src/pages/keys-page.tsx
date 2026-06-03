@@ -1,14 +1,27 @@
 import { Plus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import {
+  Page,
+  PageBody,
+  PageDescription,
+  PageHeader,
+  PageTitle,
+} from "../components/layout/page";
 import { Button } from "../components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
 import { CopyButton } from "../components/ui/copy-button";
+import { SectionCard } from "../components/ui/section-card";
 import { Dialog } from "../components/ui/dialog";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "../components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "../components/ui/sheet";
 import { Textarea } from "../components/ui/textarea";
-import { Toolbar } from "../components/ui/toolbar";
+import { PageActions, RefreshButton } from "../components/ui/page-actions";
 import { KeyTable } from "../features/keys/key-table";
 import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
@@ -43,7 +56,9 @@ export function KeysPage() {
       cancelLabel: t("cancel"),
       confirmLabel: editingKey ? t("save") : t("createKey"),
       description: editingKey ? t("confirmUpdateKey") : t("confirmCreateKey"),
-      title: editingKey ? t("confirmUpdateKeyTitle") : t("confirmCreateKeyTitle"),
+      title: editingKey
+        ? t("confirmUpdateKeyTitle")
+        : t("confirmCreateKeyTitle"),
     });
     if (!confirmed) {
       return;
@@ -89,7 +104,9 @@ export function KeysPage() {
       cancelLabel: t("cancel"),
       confirmLabel: willDisable ? t("disable") : t("enable"),
       description: willDisable ? t("confirmDisableKey") : t("confirmEnableKey"),
-      title: willDisable ? t("confirmDisableKeyTitle") : t("confirmEnableKeyTitle"),
+      title: willDisable
+        ? t("confirmDisableKeyTitle")
+        : t("confirmEnableKeyTitle"),
       tone: willDisable ? "destructive" : "default",
     });
     if (!confirmed) {
@@ -123,57 +140,87 @@ export function KeysPage() {
   }
 
   return (
-    <section className="stack">
-      <Toolbar
+    <Page>
+      <PageHeader
         actions={
-          <Sheet
-            onOpenChange={(open) => {
-              if (!open) {
-                resetForm();
-              }
-            }}
-            open={isFormOpen}
-          >
-            <SheetTrigger asChild>
-              <Button onClick={startCreate} type="button">
-                <Plus size={16} />
-                {t("createKey")}
-              </Button>
-            </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
-                <SheetTitle>{editingKey ? t("editKey") : t("createKey")}</SheetTitle>
-              </SheetHeader>
-              <form className="form-stack" onSubmit={create}>
-                <Field label={t("keyName")}>
-                  <Input value={name} onChange={(event) => setName(event.target.value)} />
-                </Field>
-                <Field label={t("notes")}>
-                  <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
-                </Field>
-                <Button type="submit">{editingKey ? t("save") : t("createKey")}</Button>
-              </form>
-            </SheetContent>
-          </Sheet>
+          <PageActions>
+            <Sheet
+              onOpenChange={(open) => {
+                if (!open) {
+                  resetForm();
+                }
+              }}
+              open={isFormOpen}
+            >
+              <SheetTrigger asChild>
+                <Button onClick={startCreate} type="button">
+                  <Plus size={16} />
+                  {t("createKey")}
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>
+                    {editingKey ? t("editKey") : t("createKey")}
+                  </SheetTitle>
+                </SheetHeader>
+                <form className="form-stack" onSubmit={create}>
+                  <Field label={t("keyName")}>
+                    <Input
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                    />
+                  </Field>
+                  <Field label={t("notes")}>
+                    <Textarea
+                      value={notes}
+                      onChange={(event) => setNotes(event.target.value)}
+                    />
+                  </Field>
+                  <Button type="submit">
+                    {editingKey ? t("save") : t("createKey")}
+                  </Button>
+                </form>
+              </SheetContent>
+            </Sheet>
+            <RefreshButton label={t("refresh")} onClick={refresh} />
+          </PageActions>
         }
-        onRefresh={refresh}
-        refreshLabel={t("refresh")}
-        title={t("keys")}
-      />
-      <Card>
-        <CardContent>
-          <KeyTable keys={keys} onDelete={(key) => void deleteKey(key)} onEdit={startEdit} onToggle={(key) => void toggleKey(key)} t={t} />
-        </CardContent>
-      </Card>
-      {confirmDialog}
-      <Dialog onClose={() => setCreated("")} open={Boolean(created)} title={t("token")}>
+      >
+        <PageTitle visuallyHidden>{t("keys")}</PageTitle>
+        <PageDescription>{t("tokenUsageHint")}</PageDescription>
+      </PageHeader>
+      <PageBody>
+        <SectionCard
+          description={`${keys.length.toLocaleString()} ${t("keys")}`}
+          title={t("keys")}
+        >
+          <KeyTable
+            keys={keys}
+            onDelete={(key) => void deleteKey(key)}
+            onEdit={startEdit}
+            onToggle={(key) => void toggleKey(key)}
+            t={t}
+          />
+        </SectionCard>
+        {confirmDialog}
+      </PageBody>
+      <Dialog
+        onClose={() => setCreated("")}
+        open={Boolean(created)}
+        title={t("token")}
+      >
         <div className="form-stack">
           <p className="hint-text">{t("tokenUsageHint")}</p>
           <code className="token-box">{created}</code>
-          <CopyButton copiedLabel={t("copied")} label={t("copy")} value={created} />
+          <CopyButton
+            copiedLabel={t("copied")}
+            label={t("copy")}
+            value={created}
+          />
         </div>
       </Dialog>
-    </section>
+    </Page>
   );
 }
 

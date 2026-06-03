@@ -1,10 +1,23 @@
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  Page,
+  PageBody,
+  PageDescription,
+  PageHeader,
+  PageTitle,
+} from "../components/layout/page";
 import { CopyButton } from "../components/ui/copy-button";
 import { Field } from "../components/ui/field";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { SectionCard } from "../components/ui/section-card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { useConfirm } from "../components/ui/use-confirm";
 import { useAppContext } from "../lib/app-context";
 import type { Language, ThemeMode } from "../lib/types";
-import { useConfirm } from "../components/ui/use-confirm";
 
 export function SettingsPage() {
   const { language, setLanguage, setTheme, t, theme } = useAppContext();
@@ -35,16 +48,20 @@ export function SettingsPage() {
   }
 
   return (
-    <section className="settings-grid">
+    <Page>
       {confirmDialog}
-      <AccessPanel t={t} />
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("language")}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <PageHeader>
+        <PageTitle visuallyHidden>{t("settings")}</PageTitle>
+        <PageDescription>{t("externalAccess")}</PageDescription>
+      </PageHeader>
+      <PageBody className="settings-grid">
+        <AccessPanel t={t} />
+        <SectionCard title={t("language")}>
           <Field label={t("language")}>
-            <Select value={language} onValueChange={(value) => void changeLanguage(value as Language)}>
+            <Select
+              value={language}
+              onValueChange={(value) => void changeLanguage(value as Language)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -54,15 +71,13 @@ export function SettingsPage() {
               </SelectContent>
             </Select>
           </Field>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("theme")}</CardTitle>
-        </CardHeader>
-        <CardContent>
+        </SectionCard>
+        <SectionCard title={t("theme")}>
           <Field label={t("theme")}>
-            <Select value={theme} onValueChange={(value) => void changeTheme(value as ThemeMode)}>
+            <Select
+              value={theme}
+              onValueChange={(value) => void changeTheme(value as ThemeMode)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -73,9 +88,9 @@ export function SettingsPage() {
               </SelectContent>
             </Select>
           </Field>
-        </CardContent>
-      </Card>
-    </section>
+        </SectionCard>
+      </PageBody>
+    </Page>
   );
 }
 
@@ -86,19 +101,34 @@ function AccessPanel({ t }: { t: (key: string) => string }) {
   const curl = `curl ${chatUrl} -H "Authorization: Bearer <proxy-hub-api-key>" -H "Content-Type: application/json" -d "{\\"model\\":\\"<visible-model>\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"hi\\"}]}"`;
 
   return (
-    <Card className="settings-wide-card">
-      <CardHeader>
-        <CardTitle>{t("externalAccess")}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="endpoint-grid">
-          <CopyValue copiedLabel={t("copied")} label={t("openAIBaseUrl")} value={baseUrl} t={t} />
-          <CopyValue copiedLabel={t("copied")} label={t("chatCompletionsUrl")} value={chatUrl} t={t} />
-          <CopyValue copiedLabel={t("copied")} label={t("modelsUrl")} value={modelsUrl} t={t} />
-          <CopyValue copiedLabel={t("copied")} label={t("curlExample")} value={curl} t={t} />
-        </div>
-      </CardContent>
-    </Card>
+    <SectionCard className="settings-wide-card" title={t("externalAccess")}>
+      <div className="endpoint-grid">
+        <CopyValue
+          copiedLabel={t("copied")}
+          label={t("openAIBaseUrl")}
+          value={baseUrl}
+          t={t}
+        />
+        <CopyValue
+          copiedLabel={t("copied")}
+          label={t("chatCompletionsUrl")}
+          value={chatUrl}
+          t={t}
+        />
+        <CopyValue
+          copiedLabel={t("copied")}
+          label={t("modelsUrl")}
+          value={modelsUrl}
+          t={t}
+        />
+        <CopyValue
+          copiedLabel={t("copied")}
+          label={t("curlExample")}
+          value={curl}
+          t={t}
+        />
+      </div>
+    </SectionCard>
   );
 }
 

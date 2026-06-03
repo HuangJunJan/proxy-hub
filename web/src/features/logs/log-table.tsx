@@ -2,23 +2,60 @@ import { Badge } from "../../components/ui/badge";
 import { DataTable } from "../../components/ui/data-table";
 import type { RequestLog } from "../../lib/types";
 
-export function LogTable({ className, logs, t }: { className?: string; logs: RequestLog[]; t: (key: string) => string }) {
+export function LogTable({
+  className,
+  logs,
+  t,
+}: {
+  className?: string;
+  logs: RequestLog[];
+  t: (key: string) => string;
+}) {
   return (
     <DataTable
       className={className ?? "request-log-table-wrap"}
       empty={t("empty")}
-      headers={[t("time"), t("channelName"), t("model"), t("status"), t("duration"), t("token")]}
-      rows={logs.map((log) => [
-        <StackCell key={`${log.id}-time`} primary={formatDate(log.ts)} secondary={formatTime(log.ts)} />,
-        <StackCell key={`${log.id}-channel`} primary={log.channelName || "-"} secondary={log.channelType || undefined} />,
-        <StackCell key={`${log.id}-model`} primary={log.downstreamModel || "-"} secondary={modelSecondary(log)} />,
-        <div key={`${log.id}-status`} className="log-type-cell">
-          <Badge variant={statusVariant(log.statusCode)}>{log.statusCode}</Badge>
-          {log.attempts > 1 && <span className="log-attempts">x{log.attempts}</span>}
-        </div>,
-        <ValueCell key={`${log.id}-duration`} value={formatMS(log.durationMs)} />,
-        <TokenCell key={`${log.id}-tokens`} log={log} t={t} />,
-      ])}
+      headers={[
+        t("time"),
+        t("channelName"),
+        t("model"),
+        t("status"),
+        t("duration"),
+        t("token"),
+      ]}
+      rows={logs.map((log) => ({
+        cells: [
+          <StackCell
+            key={`${log.id}-time`}
+            primary={formatDate(log.ts)}
+            secondary={formatTime(log.ts)}
+          />,
+          <StackCell
+            key={`${log.id}-channel`}
+            primary={log.channelName || "-"}
+            secondary={log.channelType || undefined}
+          />,
+          <StackCell
+            key={`${log.id}-model`}
+            primary={log.downstreamModel || "-"}
+            secondary={modelSecondary(log)}
+          />,
+          <div key={`${log.id}-status`} className="log-type-cell">
+            <Badge variant={statusVariant(log.statusCode)}>
+              {log.statusCode}
+            </Badge>
+            {log.attempts > 1 && (
+              <span className="log-attempts">x{log.attempts}</span>
+            )}
+          </div>,
+          <ValueCell
+            key={`${log.id}-duration`}
+            value={formatMS(log.durationMs)}
+          />,
+          <TokenCell key={`${log.id}-tokens`} log={log} t={t} />,
+        ],
+        key: log.id,
+      }))}
       tableClassName="request-log-table"
     />
   );
@@ -35,7 +72,11 @@ function statusVariant(statusCode: number) {
 }
 
 function modelSecondary(log: RequestLog) {
-  const parts = [log.upstreamModel && log.upstreamModel !== log.downstreamModel ? log.upstreamModel : undefined].filter(Boolean);
+  const parts = [
+    log.upstreamModel && log.upstreamModel !== log.downstreamModel
+      ? log.upstreamModel
+      : undefined,
+  ].filter(Boolean);
   return parts.length > 0 ? parts.join(" / ") : undefined;
 }
 
@@ -61,7 +102,13 @@ function formatTime(ts: number) {
   }).format(new Date(ts));
 }
 
-function StackCell({ primary, secondary }: { primary: string; secondary?: string }) {
+function StackCell({
+  primary,
+  secondary,
+}: {
+  primary: string;
+  secondary?: string;
+}) {
   return (
     <span className="table-cell-stack log-stack-cell">
       <strong>{primary}</strong>
@@ -74,7 +121,13 @@ function ValueCell({ muted, value }: { muted?: boolean; value: string }) {
   return <span className={muted ? "muted-text" : undefined}>{value}</span>;
 }
 
-function TokenCell({ log, t }: { log: RequestLog; t: (key: string) => string }) {
+function TokenCell({
+  log,
+  t,
+}: {
+  log: RequestLog;
+  t: (key: string) => string;
+}) {
   const rows = [
     [t("inputToken"), log.promptTokens],
     [t("outputToken"), log.completionTokens],

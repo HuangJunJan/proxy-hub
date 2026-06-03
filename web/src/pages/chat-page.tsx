@@ -1,22 +1,51 @@
-import { Bot, Eraser, RefreshCw, Send, User } from "lucide-react";
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Bot, Eraser, Send, User } from "lucide-react";
+import {
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  Page,
+  PageBody,
+  PageDescription,
+  PageHeader,
+  PageTitle,
+} from "../components/layout/page";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
 import { Field } from "../components/ui/field";
 import { Input } from "../components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { PageActions, RefreshButton } from "../components/ui/page-actions";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { SectionCard } from "../components/ui/section-card";
 import { Textarea } from "../components/ui/textarea";
+import { useConfirm } from "../components/ui/use-confirm";
 import { api } from "../lib/api";
 import { useAppContext } from "../lib/app-context";
 import { useAsyncAction } from "../lib/use-async-action";
-import { useConfirm } from "../components/ui/use-confirm";
-import type { ChatMessage, ChannelsResponse, ModelEntry, OpenAIChannel } from "../lib/types";
+import type {
+  ChatMessage,
+  ChannelsResponse,
+  ModelEntry,
+  OpenAIChannel,
+} from "../lib/types";
 
 type ChatLine = ChatMessage & { id: string };
 type ModelOption = { label: string; value: string };
 
-const emptyChannels: ChannelsResponse = { "chatgpt-oauth": [], "openai-api": [] };
+const emptyChannels: ChannelsResponse = {
+  "chatgpt-oauth": [],
+  "openai-api": [],
+};
 
 export function ChatPage() {
   const { t } = useAppContext();
@@ -28,12 +57,19 @@ export function ChatPage() {
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const openAIChannels = useMemo(() => channels["openai-api"].filter((channel) => !channel.disabled), [channels]);
+  const openAIChannels = useMemo(
+    () => channels["openai-api"].filter((channel) => !channel.disabled),
+    [channels],
+  );
   const selectedChannel = useMemo(
-    () => openAIChannels.find((channel) => channel.name === channelName) ?? null,
+    () =>
+      openAIChannels.find((channel) => channel.name === channelName) ?? null,
     [channelName, openAIChannels],
   );
-  const modelOptions = useMemo(() => modelOptionsForChannel(selectedChannel), [selectedChannel]);
+  const modelOptions = useMemo(
+    () => modelOptionsForChannel(selectedChannel),
+    [selectedChannel],
+  );
 
   async function refresh() {
     try {
@@ -75,7 +111,11 @@ export function ChatPage() {
       return;
     }
     const previousMessages = messages;
-    const userMessage: ChatLine = { content, id: crypto.randomUUID(), role: "user" };
+    const userMessage: ChatLine = {
+      content,
+      id: crypto.randomUUID(),
+      role: "user",
+    };
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setDraft("");
@@ -83,12 +123,20 @@ export function ChatPage() {
       const response = await api.chatCompletion({
         channelName: selectedChannel.name,
         channelType: "openai-api",
-        messages: nextMessages.map(({ content: messageContent, role }) => ({ content: messageContent, role })),
+        messages: nextMessages.map(({ content: messageContent, role }) => ({
+          content: messageContent,
+          role,
+        })),
         model: requestedModel,
       });
       setMessages((current) => [
         ...current,
-        { content: response.content || JSON.stringify(response.raw ?? {}, null, 2), id: crypto.randomUUID(), role: "assistant" },
+        {
+          content:
+            response.content || JSON.stringify(response.raw ?? {}, null, 2),
+          id: crypto.randomUUID(),
+          role: "assistant",
+        },
       ]);
     } catch {
       setMessages(previousMessages);
@@ -112,18 +160,59 @@ export function ChatPage() {
   }
 
   return (
-    <section className="chat-layout">
-      <aside className="chat-controls">
-        <Card>
-          <CardContent>
+    <Page>
+      <PageHeader
+        actions={
+          <PageActions>
+            <RefreshButton label={t("refresh")} onClick={refresh} />
+            <Button
+              onClick={async () => {
+                const confirmed = await confirm({
+                  cancelLabel: t("cancel"),
+                  confirmLabel: t("clear"),
+                  description: t("confirmClearChat"),
+                  title: t("confirmClearChatTitle"),
+                  tone: "destructive",
+                });
+                if (confirmed) {
+                  setMessages([]);
+                }
+              }}
+              type="button"
+              variant="outline"
+            >
+              <Eraser size={16} />
+              {t("clear")}
+            </Button>
+          </PageActions>
+        }
+      >
+        <PageTitle visuallyHidden>{t("chat")}</PageTitle>
+        <PageDescription>
+          {selectedChannel ? selectedChannel["base-url"] : t("emptyChat")}
+        </PageDescription>
+      </PageHeader>
+      <PageBody className="chat-layout">
+        <aside className="chat-controls">
+          <SectionCard
+            description={selectedChannel?.name || t("empty")}
+            title={t("connection")}
+          >
             <div className="form-stack">
               <Field label={t("channelName")}>
-                <Select value={channelName || "none"} onValueChange={(value) => setChannelName(value === "none" ? "" : value)}>
+                <Select
+                  value={channelName || "none"}
+                  onValueChange={(value) =>
+                    setChannelName(value === "none" ? "" : value)
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {openAIChannels.length === 0 && <SelectItem value="none">{t("empty")}</SelectItem>}
+                    {openAIChannels.length === 0 && (
+                      <SelectItem value="none">{t("empty")}</SelectItem>
+                    )}
                     {openAIChannels.map((channel) => (
                       <SelectItem key={channel.name} value={channel.name}>
                         {channel.name}
@@ -154,39 +243,12 @@ export function ChatPage() {
                 </Badge>
                 {selectedChannel && <span>{selectedChannel["base-url"]}</span>}
               </div>
-              <div className="row">
-                <Button onClick={refresh} type="button" variant="outline">
-                  <RefreshCw size={16} />
-                  {t("refresh")}
-                </Button>
-                <Button
-                  onClick={async () => {
-                    const confirmed = await confirm({
-                      cancelLabel: t("cancel"),
-                      confirmLabel: t("clear"),
-                      description: t("confirmClearChat"),
-                      title: t("confirmClearChatTitle"),
-                      tone: "destructive",
-                    });
-                    if (confirmed) {
-                      setMessages([]);
-                    }
-                  }}
-                  type="button"
-                  variant="outline"
-                >
-                  <Eraser size={16} />
-                  {t("clear")}
-                </Button>
-              </div>
             </div>
-          </CardContent>
-        </Card>
-      </aside>
-      {confirmDialog}
-      <main className="chat-panel">
-        <Card className="chat-card">
-          <CardContent>
+          </SectionCard>
+        </aside>
+        {confirmDialog}
+        <main className="chat-panel">
+          <SectionCard className="chat-card" title={t("chat")}>
             <div className="chat-thread" aria-live="polite">
               {messages.length === 0 && (
                 <div className="chat-empty">
@@ -195,9 +257,16 @@ export function ChatPage() {
                 </div>
               )}
               {messages.map((message) => (
-                <div className={`chat-message ${message.role}`} key={message.id}>
+                <div
+                  className={`chat-message ${message.role}`}
+                  key={message.id}
+                >
                   <span className="chat-avatar" aria-hidden="true">
-                    {message.role === "assistant" ? <Bot size={16} /> : <User size={16} />}
+                    {message.role === "assistant" ? (
+                      <Bot size={16} />
+                    ) : (
+                      <User size={16} />
+                    )}
                   </span>
                   <p>{message.content}</p>
                 </div>
@@ -220,15 +289,20 @@ export function ChatPage() {
                 placeholder={t("chatPlaceholder")}
                 value={draft}
               />
-              <Button disabled={!selectedChannel || !model.trim() || !draft.trim() || loading} type="submit">
+              <Button
+                disabled={
+                  !selectedChannel || !model.trim() || !draft.trim() || loading
+                }
+                type="submit"
+              >
                 <Send size={16} />
                 {t("send")}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-      </main>
-    </section>
+          </SectionCard>
+        </main>
+      </PageBody>
+    </Page>
   );
 }
 

@@ -1,6 +1,11 @@
 import { ReactNode } from "react";
 import { cn } from "../../lib/cn";
 
+export interface DataTableRow {
+  cells: ReactNode[];
+  key: number | string;
+}
+
 export function DataTable({
   className,
   empty,
@@ -11,7 +16,7 @@ export function DataTable({
   className?: string;
   empty: string;
   headers: string[];
-  rows: Array<Array<ReactNode>>;
+  rows: DataTableRow[];
   tableClassName?: string;
 }) {
   return (
@@ -30,9 +35,9 @@ export function DataTable({
               <td colSpan={headers.length}>{empty}</td>
             </tr>
           ) : (
-            rows.map((row, index) => (
-              <tr key={index}>
-                {row.map((cell, cellIndex) => (
+            rows.map((row) => (
+              <tr key={row.key}>
+                {row.cells.map((cell, cellIndex) => (
                   <td key={cellIndex}>{cell}</td>
                 ))}
               </tr>

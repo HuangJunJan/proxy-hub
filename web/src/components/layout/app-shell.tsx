@@ -1,18 +1,29 @@
-import { Activity, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  Activity,
+  ChevronLeft,
+  LogOut,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import logoUrl from "../../assets/logo.png";
 import { api } from "../../lib/api";
 import { useAppContext } from "../../lib/app-context";
 import { consoleRoutes, titleForPath } from "../../lib/navigation";
 import type { Language, ThemeMode } from "../../lib/types";
-import { useConfirm } from "../ui/use-confirm";
+import { cn } from "../../lib/cn";
 import { Button } from "../ui/button";
+import { Card } from "../ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import logoUrl from "../../assets/logo.png";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "../ui/sheet";
+import { useConfirm } from "../ui/use-confirm";
 
 export function AppShell() {
   const { language, setLanguage, setLoggedOut, setTheme, t, theme, username } = useAppContext();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
   const location = useLocation();
   const navigate = useNavigate();
@@ -61,60 +72,54 @@ export function AppShell() {
   }
 
   return (
-    <div className={sidebarCollapsed ? "layout sidebar-collapsed" : "layout"}>
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">
-            <img alt="" aria-hidden="true" className="brand-logo" src={logoUrl} />
-          </div>
-          <div className="brand-copy">
-            <strong>{t("appName")}</strong>
-            <span>{username}</span>
-          </div>
-        </div>
-        <nav aria-label="Main navigation" className="sidebar-nav">
-          {consoleRoutes.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink className={({ isActive }) => (isActive ? "nav-item active" : "nav-item")} key={item.path} to={item.path}>
-                <span className="nav-icon">
-                  <Icon size={18} />
+    <div className={cn("app-shell", sidebarCollapsed && "app-shell-sidebar-collapsed")}>
+      <DesktopSidebar collapsed={sidebarCollapsed} routeTitle={routeTitle} username={username} />
+      <div className="app-shell-main">
+        <header className="app-topbar">
+          <div className="app-topbar-title">
+            <div className="app-topbar-leading">
+              <Sheet onOpenChange={setMobileNavOpen} open={mobileNavOpen}>
+                <SheetTrigger asChild>
+                  <Button aria-label={t("expandSidebar")} className="app-mobile-nav-trigger" size="icon" type="button" variant="outline">
+                    <Menu size={18} />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="app-mobile-nav-sheet">
+                  <SheetHeader className="app-mobile-nav-header">
+                    <SheetTitle>{t("appName")}</SheetTitle>
+                  </SheetHeader>
+                  <MobileSidebarContent onNavigate={() => setMobileNavOpen(false)} routeTitle={routeTitle} username={username} />
+                </SheetContent>
+              </Sheet>
+              <Button
+                aria-label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+                className="app-sidebar-toggle"
+                onClick={() => setSidebarCollapsed((value) => !value)}
+                size="icon"
+                type="button"
+                variant="outline"
+              >
+                {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+              </Button>
+              {CurrentIcon && (
+                <span aria-hidden="true" className="app-topbar-icon">
+                  <CurrentIcon size={18} />
                 </span>
-                {t(item.labelKey)}
-              </NavLink>
-            );
-          })}
-        </nav>
-      </aside>
-      <main className="workspace">
-        <header className="topbar">
-          <div className="topbar-title">
-            <Button
-              aria-label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
-              className="sidebar-toggle"
-              onClick={() => setSidebarCollapsed((value) => !value)}
-              size="icon"
-              type="button"
-              variant="outline"
-            >
-              {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-            </Button>
-            {CurrentIcon && (
-              <span className="topbar-icon" aria-hidden="true">
-                <CurrentIcon size={18} />
-              </span>
-            )}
-            <div>
+              )}
+            </div>
+            <div className="app-topbar-copy">
               <h1>{routeTitle}</h1>
-              <span className="topbar-subtitle">{username ? `${t("appName")} · ${username}` : t("appName")}</span>
+              <span className="app-topbar-subtitle">{username ? `${t("appName")} · ${username}` : t("appName")}</span>
             </div>
           </div>
-          <div className="topbar-actions">
-            <div className="gateway-status">
-              <Activity size={16} />
-              <span>{t("gatewayReady")}</span>
-            </div>
-            <div className="topbar-control-group" aria-label="Display preferences">
+          <div className="app-topbar-actions">
+            <Card className="app-status-pill">
+              <div className="app-status-pill-content">
+                <Activity size={16} />
+                <span>{t("gatewayReady")}</span>
+              </div>
+            </Card>
+            <div aria-label="Display preferences" className="app-preference-group">
               <Select value={language} onValueChange={(value) => void changeLanguage(value as Language)}>
                 <SelectTrigger aria-label="Language">
                   <SelectValue />
@@ -135,21 +140,102 @@ export function AppShell() {
                 </SelectContent>
               </Select>
             </div>
-            <Button
-              onClick={() => void logout()}
-              type="button"
-              variant="outline"
-            >
+            <Button onClick={() => void logout()} type="button" variant="outline">
               <LogOut size={16} />
               {t("logout")}
             </Button>
           </div>
         </header>
         {confirmDialog}
-        <div className="workspace-content">
+        <main className="app-shell-content">
           <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function DesktopSidebar({
+  collapsed,
+  routeTitle,
+  username,
+}: {
+  collapsed: boolean;
+  routeTitle: string;
+  username: string;
+}) {
+  return (
+    <aside className="app-sidebar">
+      <SidebarContent collapsed={collapsed} routeTitle={routeTitle} username={username} />
+    </aside>
+  );
+}
+
+function MobileSidebarContent({
+  onNavigate,
+  routeTitle,
+  username,
+}: {
+  onNavigate: () => void;
+  routeTitle: string;
+  username: string;
+}) {
+  return <SidebarContent onNavigate={onNavigate} routeTitle={routeTitle} username={username} />;
+}
+
+function SidebarContent({
+  collapsed = false,
+  onNavigate,
+  routeTitle,
+  username,
+}: {
+  collapsed?: boolean;
+  onNavigate?: () => void;
+  routeTitle: string;
+  username: string;
+}) {
+  const { t } = useAppContext();
+
+  return (
+    <div className={cn("app-sidebar-panel", collapsed && "app-sidebar-panel-collapsed")}>
+      <div className="app-sidebar-brand">
+        <div className="app-sidebar-brand-mark">
+          <img alt="" aria-hidden="true" className="app-sidebar-brand-logo" src={logoUrl} />
         </div>
-      </main>
+        <div className="app-sidebar-brand-copy">
+          <strong>{t("appName")}</strong>
+          <span>{username}</span>
+        </div>
+      </div>
+
+      <nav aria-label="Main navigation" className="app-sidebar-nav">
+        {consoleRoutes.map((item) => {
+          const Icon = item.icon;
+          const link = (
+            <NavLink className={({ isActive }) => cn("app-sidebar-link", isActive && "is-active")} key={item.path} to={item.path}>
+              <span className="app-sidebar-link-icon">
+                <Icon size={18} />
+              </span>
+              <span className="app-sidebar-link-label">{t(item.labelKey)}</span>
+            </NavLink>
+          );
+
+          if (!onNavigate) {
+            return link;
+          }
+
+          return (
+            <SheetClose asChild key={item.path}>
+              {link}
+            </SheetClose>
+          );
+        })}
+      </nav>
+
+      <div className="app-sidebar-footer">
+        <span>{routeTitle}</span>
+        <ChevronLeft size={14} />
+      </div>
     </div>
   );
 }
