@@ -1,0 +1,33 @@
+# Docker 构建上下文忽略清单：避免把无关文件塞进镜像层。
+
+.git
+.gitignore
+.dockerignore
+
+# 本地数据与构建产物
+/data
+/bin
+/dist
+*.db
+*.db-wal
+*.db-shm
+*.bak
+*.bak-*
+
+# 参考仓库与代理工作流元数据
+references/
+.trellis/
+.agents/
+.claude/
+.codex/
+.pi/
+
+# 编辑器/系统文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+logs/

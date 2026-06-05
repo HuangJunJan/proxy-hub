@@ -1,0 +1,43 @@
+# goreleaser 雏形：跨平台静态二进制（CGO 关）。
+# 完整发布流程在后续里程碑细化（含前端构建产物注入等）。
+version: 2
+
+project_name: proxy-hub
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: proxy-hub
+    main: ./cmd/proxy-hub
+    binary: proxy-hub
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/huangjunjan/proxy-hub/internal/buildinfo.Version={{.Version}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev"
+
+changelog:
+  disable: true

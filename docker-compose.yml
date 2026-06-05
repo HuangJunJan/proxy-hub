@@ -1,0 +1,15 @@
+# proxy-hub 单服务部署：单服务 / 单数据卷 / 单对外端口，无其它依赖服务。
+
+services:
+  proxy-hub:
+    build:
+      context: .
+      args:
+        VERSION: dev
+    image: proxy-hub:dev
+    container_name: proxy-hub
+    ports:
+      - "7777:7777"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
