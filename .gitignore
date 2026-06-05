@@ -1,0 +1,50 @@
+# Local agent and workflow metadata
+.agents/
+.claude/
+.codex/
+.pi/
+
+# Reference repositories kept outside the main project history
+references/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+*.log
+logs/
+
+# Runtime and temporary files
+tmp/
+temp/
+.cache/
+
+# Build and coverage output
+/dist/
+build/
+coverage/
+/bin/
+
+# 数据目录与 SQLite 产物（运行时生成）
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.bak
+*.bak-*
+
+# 前端构建产物需被 go:embed 打包，故 web/dist 不忽略（M3 起由前端构建覆盖）。
+!web/dist/
+
+# Dependency directories
+node_modules/
+vendor/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

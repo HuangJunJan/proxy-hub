@@ -1,0 +1,32 @@
+{
+  "id": "proxy-hub-mvp",
+  "name": "proxy-hub-mvp",
+  "title": "proxy-hub MVP：统一 API-Key 网关、统计与 MCP 共享",
+  "description": "单二进制自托管网关：API-Key/upstream 渠道管理 + 模型映射，置于统一的 OpenAI/Claude 兼容端点之后；完善的用量统计与监控；轻量内嵌 SQLite 部署；以及 Codex/Claude 的 MCP 共享管理。OAuth 订阅渠道明确不在范围内。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "jan",
+  "assignee": "jan",
+  "createdAt": "2026-06-04",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "06-04-m1-foundations",
+    "06-04-m2-channel-relay",
+    "06-04-m3-stats-monitoring",
+    "06-04-m4-mcp-sharing",
+    "06-04-m5-release-hardening"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "父任务。拥有需求集、任务图与跨子验收标准。不要启动父任务；启动拥有下一个交付物的子任务。2026-06-04 范围决策：仅 API-Key/upstream 渠道。OAuth 订阅渠道已砍（ToS、Codex WebSocket 传输、utls Cloudflare 对抗、订阅用量来源问题）。因 Bash 安全分类器一度不可用，本任务用 Write 手工创建；在 task.py start 前用 task.py validate 校验。",
+  "meta": {}
+}
