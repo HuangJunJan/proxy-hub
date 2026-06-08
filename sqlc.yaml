@@ -1,0 +1,17 @@
+# sqlc 配置：从 SQLite 迁移 schema + 命名查询生成类型化 Go 代码。
+# 生成代码提交入库（internal/store/dbgen），故 go build / Docker / CI 不依赖 sqlc 二进制。
+# 修改 queries/*.sql 后本地执行 `sqlc generate` 再提交生成结果。
+version: "2"
+sql:
+  - engine: "sqlite"
+    # 复用迁移 SQL 作为 schema 源（含 0001_init.sql 的 meta、0002_channels.sql 的业务表）。
+    schema: "internal/store/migrations"
+    queries: "internal/store/queries"
+    gen:
+      go:
+        package: "dbgen"
+        out: "internal/store/dbgen"
+        emit_json_tags: true
+        emit_empty_slices: true
+        emit_interface: false
+        emit_exact_table_names: false

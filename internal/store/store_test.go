@@ -23,18 +23,23 @@ func openTestDB(t *testing.T) (*sql.DB, string) {
 	return db, dbPath
 }
 
-// TestRunFreshDB 验证全新库应用迁移后 schema_version=1。
+// TestRunFreshDB 验证全新库应用迁移后 schema_version 等于迁移条目数（最新版本）。
 func TestRunFreshDB(t *testing.T) {
 	db, dbPath := openTestDB(t)
 	if err := Run(db, dbPath); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
+	migs, err := loadMigrations()
+	if err != nil {
+		t.Fatalf("加载迁移失败: %v", err)
+	}
+	want := len(migs)
 	ver, err := readSchemaVersion(context.Background(), db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ver != 1 {
-		t.Errorf("迁移后版本应为 1，实际 %d", ver)
+	if ver != want {
+		t.Errorf("迁移后版本应为 %d，实际 %d", want, ver)
 	}
 	// meta 表应存在且可查询。
 	var name string
@@ -55,8 +60,12 @@ func TestRunIdempotent(t *testing.T) {
 		t.Fatalf("二次迁移应 no-op，却出错: %v", err)
 	}
 	ver, _ := readSchemaVersion(context.Background(), db)
-	if ver != 1 {
-		t.Errorf("二次运行后版本仍应为 1，实际 %d", ver)
+	migs, err := loadMigrations()
+	if err != nil {
+		t.Fatalf("加载迁移失败: %v", err)
+	}
+	if want := len(migs); ver != want {
+		t.Errorf("二次运行后版本仍应为 %d，实际 %d", want, ver)
 	}
 	// 由 v0 升级时生成了 .bak-0；no-op 不应再生成其它备份。
 	if _, err := os.Stat(dbPath + ".bak-1"); !os.IsNotExist(err) {

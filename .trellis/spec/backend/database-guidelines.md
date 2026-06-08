@@ -48,7 +48,38 @@ file:<dataDir>/proxy-hub.db?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL
 4. 所有待应用迁移在**单个事务**内按序执行并更新 `schema_version`；任一失败 → 整体回滚（备份即恢复点）。
 5. 改表用 `rebuildTable` helper（`CREATE 新表 → INSERT…SELECT → DROP → RENAME`，事务内），规避 SQLite `ALTER` 局限——**不要**只靠 `ALTER`/`IF NOT EXISTS`。
 
-新增迁移：在 `migrations/` 加 `000N_xxx.sql`（N=上一版本+1），纯 SQL，幂等不是必须（版本控制保证只执行一次）。
+新增迁移：在 `migrations/` 加 `000N_xxx.sql`（N=上一版本+1），纯 SQL，幂等不是必须（版本控制保证只执行一次）。**测试断言最新版本用 `len(loadMigrations())`（已校验连续 1..N），勿硬编码具体数字**（加新迁移就会变）。
+
+---
+
+## sqlc 代码生成（自 M2）
+
+`internal/store/queries/*.sql` 经 `sqlc generate` 产出类型化 Go 代码到 `internal/store/dbgen`（package `dbgen`），**提交入库**（Docker/CI 不需 sqlc 二进制）。配置 `sqlc.yaml`：`engine: sqlite`、schema 指向 `internal/store/migrations`（复用迁移作 schema 源）、queries 指向 `internal/store/queries`。**改查询后必须本地 `sqlc generate` 再提交**；校验 `git diff --exit-code internal/store/dbgen`。
+
+### 字段名映射（务必照此命名，否则手写 dao/manager 编译失败）
+
+sqlc 默认 initialisms **只有 `["id"]`**。列名→Go 名＝「下划线转驼峰、仅 `id` 全大写」：
+
+| 列 / 表 | 生成的 Go 标识 | 易错点 |
+|---|---|---|
+| `base_url` | `BaseUrl`（**非** `BaseURL`） | URL 不在缩写表 |
+| `proxy_url` | `ProxyUrl` | 同上 |
+| `group_name` | `GroupName` | `group` 是 SQL 保留字，列名用 `group_name` |
+| `id` | `ID` | 唯一全大写 |
+| 表 `api_keys` | 结构体 `ApiKey`（**非** `APIKey`） | 单数化 + 非缩写 |
+| 方法名 | 逐字取自 `-- name: Xxx` | 你写的 `CreateAPIKey` 大写被保留 |
+
+### 类型映射
+
+- `INTEGER NOT NULL` → `int64`（**`enabled`/`is_healthy` 是 `int64`，不是 `bool`**；dao 层用 `b2i`/`i2b` 互转）。
+- `TEXT NOT NULL` → `string`；可空 `TEXT` → `sql.NullString`（dao 用 `timeToNull`/`nullToTime` 转领域 `time.Time`）。
+
+### 调用约定
+
+- `dbgen.New(db DBTX) *Queries`；`DBTX` 由 `*sql.DB` 与 `*sql.Tx` 同时满足。读 `New(store.Read())`；写/事务 `New(store.Write())` 或 `New(tx)`（保存渠道 = 写 channels + 同事务重建 abilities）。
+- **单参**查询走位置参数（`GetChannel(ctx, id int64)`）；**≥2 参**用 `XxxParams` 结构体，且 `UpdateXxx`/`SetXxx` 的 **`ID` 放在 Params 末尾**。
+
+> **Warning（致命坑）**：`queries/*.sql` 里的 **CJK 注释会破坏 sqlc 的 ANTLR 查询改写器**（字节偏移错算）→ `generate` 报错或生成错代码。**查询文件一律 ASCII 注释**。迁移文件走 schema 解析、CJK 风险低，但 M2 已把 `0002` 也转 ASCII 防万一。这是本项目 `.sql` 文件**豁免「注释一律中文」规则**的唯一原因（见 `AGENTS.md`）。
 
 ---
 

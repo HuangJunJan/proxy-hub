@@ -46,9 +46,20 @@
 - 用标准 `testing`；表驱动优先；临时资源用 `t.TempDir()`、环境变量用 `t.Setenv`（自动隔离/还原）。
 - 每个有逻辑的包带单测。M1 基线覆盖：
   - `config`：默认值、yaml 覆盖、env 覆盖、缺失文件容错、校验错误、派生路径、`EnsureAdminKey`。
-  - `store`：全新库迁移版本=1、重复 no-op、预迁移备份生成、坏迁移事务回滚（版本不变 + 备份在）、`rebuildTable`、`HealthCheck`（正常 nil / 关闭后报错）、`Open` 建库+auths 目录。
+  - `store`：全新库迁移版本=`len(loadMigrations())`（M2 加 `0002` 后为 2；**按迁移条目数动态断言，勿硬编码**）、重复 no-op、预迁移备份生成、坏迁移事务回滚（版本不变 + 备份在）、`rebuildTable`、`HealthCheck`（正常 nil / 关闭后报错）、`Open` 建库+auths 目录。
 - 涉及外部 I/O（HTTP 上游、文件写）的测试用本地 stub / 临时目录，不依赖网络与真实 HOME。
-- M2 跨方言转换器、M4 fileio 往返必须有一致性/往返测试守门。
+- M2 基线覆盖：`channel`（映射解析顺序/通配/prefix、ability 重建）、`selector`（冷却/加权/亲和）、`relay`（成功/故障转移/`model_not_found`/`[1M]`兜底/**跨方言关拒绝 501**/冷却状态机各分支）、`apikey`（哈希/正负缓存/禁用）、`credstore`（往返/0600/坏JSON/删除）、`convert`（OpenAI⇄Claude 一致性套件，守门开关）。
+- 跨方言转换器（M2）、fileio 往返（M4）必须有一致性/往返测试守门。
+
+---
+
+## 跨平台文件 I/O（自 M2）
+
+> **Warning**：Windows 上删除/改名「正被读取的文件」会报 `ERROR_SHARING_VIOLATION`（"being used by another process"）——Go 的 `os.Open` 不带 `FILE_SHARE_DELETE`。
+
+`credstore` 用 `fsnotify` 监听 `data/auths/`：`Put` 触发的写事件令监听协程 `os.ReadFile` 同名文件，与 `Delete` 的 `os.Remove`（及 `Put` 的 rename 覆盖）并发即冲突。对策 `withFileOpRetry`（有界重试 20×5ms；`ErrNotExist` 立即返回；非 Windows 首次即成功、零开销）包住 `Delete.Remove` 与 `Put.Rename`。
+
+**凡「监听某目录 + 又删改其中文件」的代码都照此加重试**，不要假设 `os.Remove`/`os.Rename` 在 Windows 上即时成功。`t.TempDir()` 测试在 Windows 上尤其会暴露此类竞态。
 
 ---
 

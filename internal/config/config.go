@@ -37,14 +37,25 @@ type LogConfig struct {
 	Format string `yaml:"format"`
 }
 
+// RelayConfig 是中转相关配置。
+type RelayConfig struct {
+	// MaxRetries 是单次请求跨渠道重试的最大次数（默认 2）。
+	MaxRetries int `yaml:"max_retries"`
+	// EnableCrossDialect 控制是否启用跨方言转换（默认 false；一致性套件绿后再开）。
+	EnableCrossDialect bool `yaml:"enable_cross_dialect"`
+	// UsageBuffer 是用量事件通道容量（默认 16384；0 表示用默认）。
+	UsageBuffer int `yaml:"usage_buffer"`
+}
+
 // Config 是 proxy-hub 的完整配置模型。
 type Config struct {
 	Server ServerConfig `yaml:"server"`
 	// DataDir 是数据目录；派生出 db_path、auths_dir 等子路径。
 	DataDir string `yaml:"data_dir"`
-	// AdminKey 是管理端鉴权密钥。为空则首次运行自动生成并打印一次（M1 仅生成+打印，鉴权 M2 接管）。
-	AdminKey string    `yaml:"admin_key"`
-	Log      LogConfig `yaml:"log"`
+	// AdminKey 是管理端鉴权密钥。为空则首次运行自动生成并打印一次。
+	AdminKey string      `yaml:"admin_key"`
+	Log      LogConfig   `yaml:"log"`
+	Relay    RelayConfig `yaml:"relay"`
 	// RetentionDays 是原始请求日志保留天数（汇总不受影响）。
 	RetentionDays int `yaml:"retention_days"`
 
@@ -66,6 +77,11 @@ func Default() *Config {
 		Log: LogConfig{
 			Level:  "info",
 			Format: "text",
+		},
+		Relay: RelayConfig{
+			MaxRetries:         2,
+			EnableCrossDialect: false,
+			UsageBuffer:        16384,
 		},
 		RetentionDays: 30,
 	}
@@ -140,6 +156,21 @@ func applyEnv(cfg *Config) {
 			cfg.RetentionDays = n
 		}
 	}
+	if v, ok := lookupEnv("RELAY_MAX_RETRIES"); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Relay.MaxRetries = n
+		}
+	}
+	if v, ok := lookupEnv("RELAY_ENABLE_CROSS_DIALECT"); ok {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.Relay.EnableCrossDialect = b
+		}
+	}
+	if v, ok := lookupEnv("RELAY_USAGE_BUFFER"); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Relay.UsageBuffer = n
+		}
+	}
 }
 
 // lookupEnv 读取带前缀的环境变量；返回值与是否存在。
@@ -167,6 +198,12 @@ func (c *Config) validate() error {
 	}
 	if c.RetentionDays < 0 {
 		return fmt.Errorf("retention_days 不能为负: %d", c.RetentionDays)
+	}
+	if c.Relay.MaxRetries < 0 {
+		return fmt.Errorf("relay.max_retries 不能为负: %d", c.Relay.MaxRetries)
+	}
+	if c.Relay.UsageBuffer < 0 {
+		return fmt.Errorf("relay.usage_buffer 不能为负: %d", c.Relay.UsageBuffer)
 	}
 	return nil
 }

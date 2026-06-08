@@ -13,9 +13,16 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/huangjunjan/proxy-hub/internal/adaptor/claude" // 注册 anthropic 适配器
+	_ "github.com/huangjunjan/proxy-hub/internal/adaptor/openai" // 注册 openai 适配器
 	"github.com/huangjunjan/proxy-hub/internal/api"
+	"github.com/huangjunjan/proxy-hub/internal/apikey"
 	"github.com/huangjunjan/proxy-hub/internal/buildinfo"
+	"github.com/huangjunjan/proxy-hub/internal/channel"
 	"github.com/huangjunjan/proxy-hub/internal/config"
+	"github.com/huangjunjan/proxy-hub/internal/credstore"
+	"github.com/huangjunjan/proxy-hub/internal/relay"
+	"github.com/huangjunjan/proxy-hub/internal/selector"
 	"github.com/huangjunjan/proxy-hub/internal/store"
 )
 
@@ -78,6 +85,51 @@ func run() error {
 	}
 	defer func() { _ = st.Close() }()
 
+	// 3b. M2 装配：凭证库 + dao + 路由索引 + 编排器 + 鉴权缓存 + 健康镜像 + 中转引擎。
+	creds, err := credstore.Open(cfg.AuthsDir())
+	if err != nil {
+		return fmt.Errorf("打开凭证库失败: %w", err)
+	}
+	defer func() { _ = creds.Close() }()
+
+	startupCtx := context.Background()
+	dao := channel.NewDAO(st)
+	routeIndex := channel.NewRouteIndex()
+	manager := channel.NewManager(dao, creds, routeIndex)
+	if err := manager.LoadRouteIndex(startupCtx); err != nil {
+		return fmt.Errorf("装配路由索引失败: %w", err)
+	}
+
+	keyCache := apikey.NewCache(manager.LookupKeyByHash)
+
+	healthStore := relay.NewHealthStore(dao)
+	healthStates, err := healthStore.Load(startupCtx)
+	if err != nil {
+		return fmt.Errorf("装配渠道健康镜像失败: %w", err)
+	}
+	healthMirror := relay.NewHealthMirror(healthStore.Persist)
+	healthMirror.Load(healthStates)
+
+	emitter := relay.NewEmitter(cfg.Relay.UsageBuffer)
+	usageDone := relay.DrainAndDiscard(emitter) // M2 占位消费者；M3 采集器替换
+
+	engine := relay.NewEngine(relay.Config{
+		Index:              routeIndex,
+		Selector:           selector.New(),
+		Health:             healthMirror,
+		Emitter:            emitter,
+		Creds:              creds,
+		MaxRetries:         cfg.Relay.MaxRetries,
+		EnableCrossDialect: cfg.Relay.EnableCrossDialect,
+	})
+
+	deps := api.Deps{
+		Relay:    api.NewRelayHandler(engine, routeIndex),
+		Admin:    api.NewAdminHandler(manager),
+		APIKey:   api.NewAPIKeyHandler(manager, keyCache),
+		KeyCache: keyCache,
+	}
+
 	// 4. 配置热重载（非密钥键）。
 	watcher, err := config.Watch(*configPath, func(newCfg *config.Config) {
 		// M1：仅热生效日志级别（server 超时、retention 等的实际生效点由后续里程碑接入）。
@@ -91,7 +143,7 @@ func run() error {
 	}
 
 	// 5. 构建 HTTP 服务器。
-	handler, err := api.NewServer(cfg, st)
+	handler, err := api.NewServer(cfg, st, deps)
 	if err != nil {
 		return fmt.Errorf("构建 HTTP 服务失败: %w", err)
 	}
@@ -128,7 +180,12 @@ func run() error {
 		slog.Error("HTTP 服务停机超时/出错", "error", err)
 		return err
 	}
-	// 后续里程碑在此处 hook：flush 统计缓冲等。
+	// 服务已停（无新请求），关闭用量发射器并等待占位消费者排空。
+	emitter.Close()
+	<-usageDone
+	if dropped := emitter.Dropped(); dropped > 0 {
+		slog.Warn("用量事件曾因缓冲满被丢弃", "dropped", dropped)
+	}
 	slog.Info("proxy-hub 已停止")
 	return nil
 }

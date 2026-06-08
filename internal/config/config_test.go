@@ -25,6 +25,40 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Log.Level != "info" || cfg.Log.Format != "text" {
 		t.Errorf("默认日志应为 info/text，实际 %s/%s", cfg.Log.Level, cfg.Log.Format)
 	}
+	if cfg.Relay.MaxRetries != 2 || cfg.Relay.EnableCrossDialect || cfg.Relay.UsageBuffer != 16384 {
+		t.Errorf("默认 relay 应为 2/false/16384，实际 %+v", cfg.Relay)
+	}
+}
+
+// TestRelayConfig 验证 relay 段的 yaml 与环境变量覆盖。
+func TestRelayConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := `
+relay:
+  max_retries: 5
+  enable_cross_dialect: true
+  usage_buffer: 1024
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("加载失败: %v", err)
+	}
+	if cfg.Relay.MaxRetries != 5 || !cfg.Relay.EnableCrossDialect || cfg.Relay.UsageBuffer != 1024 {
+		t.Errorf("yaml 应覆盖 relay 为 5/true/1024，实际 %+v", cfg.Relay)
+	}
+
+	t.Setenv("PROXY_HUB_RELAY_MAX_RETRIES", "0")
+	t.Setenv("PROXY_HUB_RELAY_ENABLE_CROSS_DIALECT", "false")
+	cfg2, err := Load(path)
+	if err != nil {
+		t.Fatalf("加载失败: %v", err)
+	}
+	if cfg2.Relay.MaxRetries != 0 || cfg2.Relay.EnableCrossDialect {
+		t.Errorf("环境变量应覆盖 relay，max_retries=0/cross=false，实际 %+v", cfg2.Relay)
+	}
 }
 
 // TestLoadYAMLOverride 验证 yaml 文件覆盖默认值。

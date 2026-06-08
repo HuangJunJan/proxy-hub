@@ -20,7 +20,7 @@ server:
 data_dir: "./data"
 
 # 管理端鉴权密钥。留空则首次运行自动生成 32 字节随机值并打印一次（请妥善保存）。
-# 也可用环境变量 PROXY_HUB_ADMIN_KEY 注入。M1 仅生成+打印，真实鉴权在 M2 接管。
+# 也可用环境变量 PROXY_HUB_ADMIN_KEY 注入。守护 /admin/*；中转端点 /v1/* 走入站 key。
 admin_key: ""
 
 log:
@@ -28,6 +28,15 @@ log:
   level: "info"
   # 日志格式：text | json。
   format: "text"
+
+# 中转相关配置。
+relay:
+  # 单次请求跨渠道重试的最大次数。默认 2。
+  max_retries: 2
+  # 是否启用跨方言转换（OpenAI ⇄ Claude）。默认 false；一致性套件验证绿后再开。
+  enable_cross_dialect: false
+  # 用量事件通道容量。默认 16384；满时丢弃并计数（经仪表盘暴露，非静默）。
+  usage_buffer: 16384
 
 # 原始请求日志保留天数（汇总数据不受影响）。默认 30。
 retention_days: 30

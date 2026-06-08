@@ -15,9 +15,10 @@ This directory contains guidelines for backend development. Fill in each file wi
 | Guide | Description | Status |
 |-------|-------------|--------|
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | ✅ 已填（M1） |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | ✅ 已填（M1） |
+| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations；sqlc 约定（M2） | ✅ 已填（M1/M2） |
+| [Relay / Channel](./relay-channel.md) | 渠道/路由/适配/冷却/UsageEvent 与安全不变量 | ✅ 已填（M2） |
 | [Error Handling](./error-handling.md) | Error types, handling strategies | ✅ 已填（M1） |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | ✅ 已填（M1） |
+| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns；跨平台文件 I/O（M2） | ✅ 已填（M1/M2） |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | ✅ 已填（M1） |
 
 ---

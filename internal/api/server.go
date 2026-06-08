@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/huangjunjan/proxy-hub/internal/api/middleware"
+	"github.com/huangjunjan/proxy-hub/internal/apikey"
 	"github.com/huangjunjan/proxy-hub/internal/buildinfo"
 	"github.com/huangjunjan/proxy-hub/internal/config"
 	"github.com/huangjunjan/proxy-hub/internal/store"
@@ -19,11 +20,19 @@ import (
 // healthCheckTimeout 是 /healthz 中 DB ping 的超时。
 const healthCheckTimeout = 3 * time.Second
 
+// Deps 是 HTTP 路由所需的处理器与依赖（由 main 装配后注入）。
+type Deps struct {
+	Relay    *RelayHandler
+	Admin    *AdminHandler
+	APIKey   *APIKeyHandler
+	KeyCache *apikey.Cache
+}
+
 // NewServer 构建配置好中间件与路由的 *gin.Engine。
 //
-// 中间件链顺序：recover → request-id → body-limit。auth 雏形挂在受保护路由组上
-// （M1 暂未注册 /admin/*、/v0/*，故此处仅保留骨架）。/healthz 不受 auth 约束。
-func NewServer(cfg *config.Config, st *store.Store) (*gin.Engine, error) {
+// 中间件链顺序：recover → request-id → body-limit。/healthz 不受 auth 约束。
+// 路由分两组：/v1/*（中转，入站 key 鉴权）与 /admin/*（管理，admin key 鉴权）。
+func NewServer(cfg *config.Config, st *store.Store, deps Deps) (*gin.Engine, error) {
 	gin.SetMode(gin.ReleaseMode)
 	// 用 gin.New() 而非 gin.Default()，避免默认 logger 噪音；日志走 slog。
 	r := gin.New()
@@ -35,11 +44,33 @@ func NewServer(cfg *config.Config, st *store.Store) (*gin.Engine, error) {
 	// 健康检查：进程存活 + DB ping。
 	r.GET("/healthz", healthzHandler(st))
 
-	// 受保护路由组骨架（M2 起注册真实路由）。M1 仅装配 auth 中间件占位。
-	protected := r.Group("/")
-	protected.Use(middleware.Auth(cfg.AdminKey))
-	// M1 此处无子路由：/admin/*、/v0/* 由后续里程碑注册。
-	_ = protected
+	// 中转端点：入站 key 鉴权（OpenAI/Claude/Responses 方言 + 模型列表）。
+	if deps.Relay != nil {
+		v1 := r.Group("/v1")
+		v1.Use(middleware.InboundAuth(deps.KeyCache))
+		v1.POST("/chat/completions", deps.Relay.ChatCompletions)
+		v1.POST("/messages", deps.Relay.Messages)
+		v1.POST("/responses", deps.Relay.Responses)
+		v1.GET("/models", deps.Relay.Models)
+	}
+
+	// 管理端点：admin key 鉴权（渠道 CRUD + 测试，入站 key CRUD）。
+	admin := r.Group("/admin")
+	admin.Use(middleware.Auth(cfg.AdminKey))
+	if deps.Admin != nil {
+		admin.GET("/channels", deps.Admin.List)
+		admin.POST("/channels", deps.Admin.Create)
+		admin.GET("/channels/:id", deps.Admin.Get)
+		admin.PUT("/channels/:id", deps.Admin.Update)
+		admin.DELETE("/channels/:id", deps.Admin.Delete)
+		admin.POST("/channels/:id/test", deps.Admin.Test)
+	}
+	if deps.APIKey != nil {
+		admin.GET("/api-keys", deps.APIKey.List)
+		admin.POST("/api-keys", deps.APIKey.Create)
+		admin.PUT("/api-keys/:id", deps.APIKey.SetEnabled)
+		admin.DELETE("/api-keys/:id", deps.APIKey.Delete)
+	}
 
 	// 静态 SPA 壳 + history 模式回退。
 	if err := registerStatic(r); err != nil {
