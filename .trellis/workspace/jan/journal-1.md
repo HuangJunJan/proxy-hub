@@ -169,3 +169,36 @@ Bash 分类器恢复后跑通验证链：sqlc generate 产出 dbgen、go vet/bui
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: M3 统计与监控：采集/汇总/读时定价 + React 仪表盘（全量后端+前端）
+
+**Date**: 2026-06-08
+**Task**: M3 统计与监控：采集/汇总/读时定价 + React 仪表盘（全量后端+前端）
+**Branch**: `task/m3-stats-monitoring`
+
+### Summary
+
+规划 M3 design+implement 后全量落地。internal/usage 从 relay 抽出 Event/Emitter（中立包解耦 stats↔relay）+ onFull 同步兜底。迁移 0003：request_logs（原始 token 无成本无体）+ hourly/daily rollups + model_pricing。internal/stats：event（错误归一/桶键/BillableInput 缓存语义归一）、pricing（decimal 读时算 + 内置 seed.json embed + pricing_missing）、dao（批量插入 tx/汇总 UPSERT 累加/仪表盘查询/CleanupRawLogs/定价 CRUD）、collector（单消费协程：批 100/200ms + 内存滚动汇总 60s UPSERT + 关机最终 flush）。api/stats_handlers：overview/timeseries/breakdown/logs/health + pricing CRUD（读时成本+缺价+dropped 暴露）。config StatsConfig；main 采集器取代占位消费者 + 保留清理（启动+每日）。前端 web/：Vite+React+TS+Tailwind+TanStack Query+recharts 仪表盘（概览/趋势/分组/日志钻取/健康/定价），dev 8888 代理 7777，生产 web/dist 经 go:embed 单端口。验证：gofmt/vet/go build/go test ./... + 前端 tsc/vite build 全绿；端到端冒烟（迁移 v3+seed+SPA+/admin/stats/*+/admin/pricing+401）通过。提交 ba20a92（51 文件 +7550/-146）。M3 完成，MVP 3/5，待 M4。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ba20a92` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
