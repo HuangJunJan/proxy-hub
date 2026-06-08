@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { getAdminKey, setAdminKey } from './api'
-import { BreakdownPage, HealthPage, LogsPage, OverviewPage, PricingPage, TimeseriesPage } from './pages'
+import { BreakdownPage, HealthPage, LogsPage, MCPPage, OverviewPage, PricingPage, TimeseriesPage } from './pages'
 
 const TABS = [
   { id: 'overview', label: '概览' },
@@ -9,6 +9,7 @@ const TABS = [
   { id: 'logs', label: '请求日志' },
   { id: 'health', label: '渠道健康' },
   { id: 'pricing', label: '定价' },
+  { id: 'mcp', label: 'MCP' },
 ] as const
 type TabID = (typeof TABS)[number]['id']
 
@@ -35,7 +36,7 @@ export default function App() {
       <header className="flex items-center justify-between border-b bg-white px-6 py-3">
         <h1 className="text-lg font-semibold">proxy-hub 控制台</h1>
         <div className="flex items-center gap-3">
-          {tab !== 'logs' && tab !== 'health' && tab !== 'pricing' && (
+          {tab !== 'logs' && tab !== 'health' && tab !== 'pricing' && tab !== 'mcp' && (
             <select
               value={range}
               onChange={(e) => setRange(e.target.value)}
@@ -82,6 +83,7 @@ export default function App() {
         {tab === 'logs' && <LogsPage />}
         {tab === 'health' && <HealthPage />}
         {tab === 'pricing' && <PricingPage />}
+        {tab === 'mcp' && <MCPPage />}
       </main>
     </div>
   )

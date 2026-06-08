@@ -21,6 +21,7 @@ import (
 	"github.com/huangjunjan/proxy-hub/internal/channel"
 	"github.com/huangjunjan/proxy-hub/internal/config"
 	"github.com/huangjunjan/proxy-hub/internal/credstore"
+	"github.com/huangjunjan/proxy-hub/internal/mcp"
 	"github.com/huangjunjan/proxy-hub/internal/relay"
 	"github.com/huangjunjan/proxy-hub/internal/selector"
 	"github.com/huangjunjan/proxy-hub/internal/stats"
@@ -183,11 +184,14 @@ func run() error {
 		}
 	}()
 
+	mcpService := mcp.NewService(mcp.NewDAO(st))
+
 	deps := api.Deps{
 		Relay:    api.NewRelayHandler(engine, routeIndex),
 		Admin:    api.NewAdminHandler(manager),
 		APIKey:   api.NewAPIKeyHandler(manager, keyCache),
 		Stats:    api.NewStatsHandler(statsDAO, pricingTable, emitter, dao),
+		MCP:      api.NewMCPHandler(mcpService),
 		KeyCache: keyCache,
 	}
 
@@ -281,13 +285,42 @@ func isFlag(arg string) bool {
 	return len(arg) > 0 && arg[0] == '-'
 }
 
-// dispatchSubcommand 是 CLI 子命令分派骨架。M1 仅占位，真实实现在后续里程碑。
-func dispatchSubcommand(name string, _ []string) error {
+// dispatchSubcommand 是 CLI 子命令分派。
+func dispatchSubcommand(name string, args []string) error {
 	switch name {
 	case "mcp":
-		// M4 实现：例如 `proxy-hub mcp sync`。
-		return fmt.Errorf("子命令 %q 尚未实现（计划于 M4）", name)
+		return runMCPSubcommand(args)
 	default:
 		return fmt.Errorf("未知子命令: %q", name)
 	}
+}
+
+// runMCPSubcommand 处理 `proxy-hub mcp sync [--config <path>]`：装配 DB + MCP 服务并全量对账（cron 友好）。
+func runMCPSubcommand(args []string) error {
+	if len(args) == 0 || args[0] != "sync" {
+		return fmt.Errorf("用法: proxy-hub mcp sync [--config <path>]")
+	}
+	configPath := "config.yaml"
+	for i := 1; i < len(args)-1; i++ {
+		if args[i] == "--config" {
+			configPath = args[i+1]
+		}
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+	setupLogger(cfg)
+	st, err := store.Open(cfg)
+	if err != nil {
+		return fmt.Errorf("打开数据库失败: %w", err)
+	}
+	defer func() { _ = st.Close() }()
+
+	svc := mcp.NewService(mcp.NewDAO(st))
+	if err := svc.SyncAll(context.Background()); err != nil {
+		return fmt.Errorf("MCP 同步失败: %w", err)
+	}
+	fmt.Println("MCP 同步完成")
+	return nil
 }

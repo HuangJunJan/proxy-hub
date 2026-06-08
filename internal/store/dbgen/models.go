@@ -60,6 +60,32 @@ type ChannelModelHealth struct {
 	UpdatedAt           string         `json:"updated_at"`
 }
 
+type McpServer struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	SpecJson      string `json:"spec_json"`
+	Description   string `json:"description"`
+	Homepage      string `json:"homepage"`
+	Docs          string `json:"docs"`
+	TagsJson      string `json:"tags_json"`
+	EnabledCodex  int64  `json:"enabled_codex"`
+	EnabledClaude int64  `json:"enabled_claude"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
+type McpSyncTarget struct {
+	ID             int64          `json:"id"`
+	Client         string         `json:"client"`
+	ConfigPath     string         `json:"config_path"`
+	Label          string         `json:"label"`
+	Enabled        int64          `json:"enabled"`
+	LastSyncedAt   sql.NullString `json:"last_synced_at"`
+	LastSyncStatus string         `json:"last_sync_status"`
+	CreatedAt      string         `json:"created_at"`
+	UpdatedAt      string         `json:"updated_at"`
+}
+
 type Meta struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

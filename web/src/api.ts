@@ -161,6 +161,46 @@ export interface LogQuery {
   size?: number
 }
 
+export interface MCPServer {
+  id: string
+  name: string
+  spec: Record<string, unknown>
+  description: string
+  homepage: string
+  docs: string
+  tags: string[]
+  enabled_codex: boolean
+  enabled_claude: boolean
+}
+export interface MCPServersResp {
+  data: MCPServer[]
+}
+export interface MCPServerInput {
+  id: string
+  name?: string
+  spec: Record<string, unknown>
+  description?: string
+  tags?: string[]
+}
+export interface MCPTarget {
+  id: number
+  client: string
+  config_path: string
+  label: string
+  enabled: boolean
+  last_synced_at: string
+  last_sync_status: string
+}
+export interface MCPTargetsResp {
+  data: MCPTarget[]
+}
+export interface MCPTargetInput {
+  client: string
+  config_path: string
+  label?: string
+  enabled?: boolean
+}
+
 export const api = {
   overview: (range: string) => adminGet<Overview>(`/admin/stats/overview?range=${range}`),
   timeseries: (range: string, interval: string) =>
@@ -184,4 +224,15 @@ export const api = {
     adminSend<unknown>('PUT', `/admin/pricing/${encodeURIComponent(model)}`, body),
   deletePricing: (model: string) =>
     adminSend<unknown>('DELETE', `/admin/pricing/${encodeURIComponent(model)}`),
+  mcpServers: () => adminGet<MCPServersResp>(`/v0/mcp/servers`),
+  mcpCreateServer: (body: MCPServerInput) => adminSend<unknown>('POST', `/v0/mcp/servers`, body),
+  mcpDeleteServer: (id: string) => adminSend<unknown>('DELETE', `/v0/mcp/servers/${encodeURIComponent(id)}`),
+  mcpToggle: (id: string, client: string, enabled: boolean) =>
+    adminSend<unknown>('PUT', `/v0/mcp/servers/${encodeURIComponent(id)}/toggle`, { client, enabled }),
+  mcpTargets: () => adminGet<MCPTargetsResp>(`/v0/mcp/targets`),
+  mcpCreateTarget: (body: MCPTargetInput) => adminSend<unknown>('POST', `/v0/mcp/targets`, body),
+  mcpDeleteTarget: (id: number) => adminSend<unknown>('DELETE', `/v0/mcp/targets/${id}`),
+  mcpSync: () => adminSend<unknown>('POST', `/v0/mcp/sync`),
+  mcpImport: (id: number) => adminSend<unknown>('POST', `/v0/mcp/import/${id}`),
 }
+

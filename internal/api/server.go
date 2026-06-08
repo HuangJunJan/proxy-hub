@@ -26,6 +26,7 @@ type Deps struct {
 	Admin    *AdminHandler
 	APIKey   *APIKeyHandler
 	Stats    *StatsHandler
+	MCP      *MCPHandler
 	KeyCache *apikey.Cache
 }
 
@@ -81,6 +82,26 @@ func NewServer(cfg *config.Config, st *store.Store, deps Deps) (*gin.Engine, err
 		admin.GET("/pricing", deps.Stats.ListPricing)
 		admin.PUT("/pricing/:model", deps.Stats.UpsertPricing)
 		admin.DELETE("/pricing/:model", deps.Stats.DeletePricing)
+	}
+
+	// MCP 共享管理端点（admin key 鉴权；与 /admin/* 同守护，见父设计 §5）。
+	if deps.MCP != nil {
+		m := r.Group("/v0/mcp")
+		m.Use(middleware.Auth(cfg.AdminKey))
+		m.GET("/servers", deps.MCP.ListServers)
+		m.POST("/servers", deps.MCP.CreateServer)
+		m.GET("/servers/:id", deps.MCP.GetServer)
+		m.PUT("/servers/:id", deps.MCP.UpdateServer)
+		m.DELETE("/servers/:id", deps.MCP.DeleteServer)
+		m.PUT("/servers/:id/toggle", deps.MCP.ToggleServer)
+		m.GET("/targets", deps.MCP.ListTargets)
+		m.POST("/targets", deps.MCP.CreateTarget)
+		m.PUT("/targets/:id", deps.MCP.UpdateTarget)
+		m.DELETE("/targets/:id", deps.MCP.DeleteTarget)
+		m.POST("/sync", deps.MCP.SyncAll)
+		m.POST("/sync/:id", deps.MCP.SyncTarget)
+		m.POST("/import/:id", deps.MCP.ImportTarget)
+		m.POST("/import-bundle", deps.MCP.ImportBundle)
 	}
 
 	// 静态 SPA 壳 + history 模式回退。

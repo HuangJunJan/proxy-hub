@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { api, type BreakdownRow, type LogQuery, type PricingInput } from './api'
+import { api, type BreakdownRow, type LogQuery, type MCPServerInput, type MCPTargetInput, type PricingInput } from './api'
 
 // ---- 共享小组件 ----
 
@@ -495,6 +495,227 @@ export function PricingPage() {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---- MCP 共享管理 ----
+
+export function MCPPage() {
+  const qc = useQueryClient()
+  const servers = useQuery({ queryKey: ['mcp-servers'], queryFn: () => api.mcpServers() })
+  const targets = useQuery({ queryKey: ['mcp-targets'], queryFn: () => api.mcpTargets() })
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['mcp-servers'] })
+    qc.invalidateQueries({ queryKey: ['mcp-targets'] })
+  }
+  const toggle = useMutation({
+    mutationFn: (v: { id: string; client: string; enabled: boolean }) => api.mcpToggle(v.id, v.client, v.enabled),
+    onSuccess: invalidate,
+  })
+  const delServer = useMutation({ mutationFn: (id: string) => api.mcpDeleteServer(id), onSuccess: invalidate })
+  const sync = useMutation({ mutationFn: () => api.mcpSync(), onSuccess: invalidate })
+  const delTarget = useMutation({ mutationFn: (id: number) => api.mcpDeleteTarget(id), onSuccess: invalidate })
+  const importT = useMutation({ mutationFn: (id: number) => api.mcpImport(id), onSuccess: invalidate })
+
+  const [sid, setSid] = useState('')
+  const [specText, setSpecText] = useState('{\n  "type": "stdio",\n  "command": "npx",\n  "args": ["-y", "<pkg>"]\n}')
+  const [addErr, setAddErr] = useState('')
+  const createServer = useMutation({
+    mutationFn: (body: MCPServerInput) => api.mcpCreateServer(body),
+    onSuccess: () => {
+      setSid('')
+      setAddErr('')
+      invalidate()
+    },
+    onError: (e) => setAddErr((e as Error).message),
+  })
+  const submitServer = () => {
+    setAddErr('')
+    if (!sid) {
+      setAddErr('需填 id')
+      return
+    }
+    let spec: Record<string, unknown>
+    try {
+      spec = JSON.parse(specText)
+    } catch {
+      setAddErr('spec 不是合法 JSON')
+      return
+    }
+    createServer.mutate({ id: sid, spec })
+  }
+
+  const [tClient, setTClient] = useState('claude')
+  const [tPath, setTPath] = useState('')
+  const [tLabel, setTLabel] = useState('')
+  const createTarget = useMutation({
+    mutationFn: (body: MCPTargetInput) => api.mcpCreateTarget(body),
+    onSuccess: () => {
+      setTPath('')
+      setTLabel('')
+      invalidate()
+    },
+  })
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium text-gray-600">MCP 服务器（SSOT → 投影到 Codex / Claude）</h2>
+        <button
+          onClick={() => sync.mutate()}
+          disabled={sync.isPending}
+          className="rounded bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-40"
+        >
+          {sync.isPending ? '同步中…' : '立即同步全部'}
+        </button>
+      </div>
+
+      {/* 新增 server */}
+      <div className="rounded-lg border bg-white p-4 shadow-sm">
+        <div className="mb-2 text-sm font-medium text-gray-600">新增 / 覆盖 server</div>
+        <div className="flex flex-wrap gap-3">
+          <Field label="id（配置键）">
+            <input className="w-48 rounded border px-2 py-1 text-sm" value={sid} onChange={(e) => setSid(e.target.value)} />
+          </Field>
+          <label className="flex flex-1 flex-col gap-1">
+            <span className="text-xs text-gray-500">spec（JSON：stdio command/args/env 或 http url/headers）</span>
+            <textarea
+              className="h-28 w-full rounded border px-2 py-1 font-mono text-xs"
+              value={specText}
+              onChange={(e) => setSpecText(e.target.value)}
+            />
+          </label>
+        </div>
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            onClick={submitServer}
+            disabled={createServer.isPending}
+            className="rounded bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-40"
+          >
+            保存
+          </button>
+          {addErr && <span className="text-sm text-red-600">{addErr}</span>}
+        </div>
+      </div>
+
+      {/* server 列表 */}
+      {servers.isLoading && <Loading />}
+      {servers.error && <ErrorBox error={servers.error} />}
+      {servers.data && (
+        <div className="overflow-x-auto rounded-lg border bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-4 py-2">id</th>
+                <th className="px-4 py-2">type</th>
+                <th className="px-4 py-2 text-center">Codex</th>
+                <th className="px-4 py-2 text-center">Claude</th>
+                <th className="px-4 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {servers.data.data.map((s) => (
+                <tr key={s.id} className="border-t">
+                  <td className="px-4 py-2 font-mono text-xs">{s.id}</td>
+                  <td className="px-4 py-2 text-xs text-gray-500">{String(s.spec['type'] ?? 'stdio')}</td>
+                  <td className="px-4 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={s.enabled_codex}
+                      onChange={(e) => toggle.mutate({ id: s.id, client: 'codex', enabled: e.target.checked })}
+                    />
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={s.enabled_claude}
+                      onChange={(e) => toggle.mutate({ id: s.id, client: 'claude', enabled: e.target.checked })}
+                    />
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => delServer.mutate(s.id)} className="text-red-600 hover:underline">
+                      删除
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {servers.data.data.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-gray-400">
+                    暂无 MCP server
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 同步目标 */}
+      <div className="rounded-lg border bg-white p-4 shadow-sm">
+        <div className="mb-2 text-sm font-medium text-gray-600">同步目标（显式登记的客户端配置文件，绝对路径）</div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="client">
+            <select value={tClient} onChange={(e) => setTClient(e.target.value)} className="rounded border px-2 py-1 text-sm">
+              <option value="claude">claude</option>
+              <option value="codex">codex</option>
+            </select>
+          </Field>
+          <Field label="config_path">
+            <input className="w-80 rounded border px-2 py-1 text-sm" value={tPath} onChange={(e) => setTPath(e.target.value)} />
+          </Field>
+          <Field label="label">
+            <input className="w-32 rounded border px-2 py-1 text-sm" value={tLabel} onChange={(e) => setTLabel(e.target.value)} />
+          </Field>
+          <button
+            disabled={!tPath || createTarget.isPending}
+            onClick={() => createTarget.mutate({ client: tClient, config_path: tPath, label: tLabel })}
+            className="rounded bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-40"
+          >
+            登记
+          </button>
+        </div>
+      </div>
+
+      {targets.data && (
+        <div className="overflow-x-auto rounded-lg border bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-4 py-2">client</th>
+                <th className="px-4 py-2">config_path</th>
+                <th className="px-4 py-2">最近状态</th>
+                <th className="px-4 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {targets.data.data.map((t) => (
+                <tr key={t.id} className="border-t">
+                  <td className="px-4 py-2">{t.client}</td>
+                  <td className="px-4 py-2 font-mono text-xs">{t.config_path}</td>
+                  <td className="px-4 py-2 text-xs text-gray-500">{t.last_sync_status || '-'}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => importT.mutate(t.id)} className="mr-2 text-blue-600 hover:underline">
+                      导入
+                    </button>
+                    <button onClick={() => delTarget.mutate(t.id)} className="text-red-600 hover:underline">
+                      删除
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {targets.data.data.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-gray-400">
+                    暂无同步目标
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
