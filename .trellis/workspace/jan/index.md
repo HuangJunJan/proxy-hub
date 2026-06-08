@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 1
-- **Last Active**: 2026-06-05
+- **Total Sessions**: 2
+- **Last Active**: 2026-06-08
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~41 | Active |
+| `journal-1.md` | ~157 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 2 | 2026-06-08 | M2 渠道中转：机械验证全绿 + 跨方言开关守门 + 提交归档 | `271db8b` | `task/m2-channel-relay` |
 | 1 | 2026-06-05 | M1 基础骨架完成 + 端口改 7777/8888 | `c388b1d`, `0f2ec74` | `task/m1-foundations` |
 <!-- @@@/auto:session-history -->
 
