@@ -202,3 +202,36 @@ Bash 分类器恢复后跑通验证链：sqlc generate 产出 dbgen、go vet/bui
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: M4 MCP 共享管理：SSOT + Codex/Claude 文件投影 + 原子写（前后端，协作 fork）
+
+**Date**: 2026-06-08
+**Task**: M4 MCP 共享管理：SSOT + Codex/Claude 文件投影 + 原子写（前后端，协作 fork）
+**Branch**: `task/m4-mcp-sharing`
+
+### Summary
+
+M4 完成并端到端验证。internal/fileio.UpdateFile（锁内读-改-写原子 + 首写 .bak + 父目录缺失跳过 + Windows rename 重试）。迁移 0004：mcp_servers（SSOT + per-client 位图 + spec_json 保留未知字段）+ mcp_sync_targets。internal/mcp：宽松校验、DAO、Claude 写入器（sjson 只改 mcpServers、字节保留 projects 等顶层键、cmd/c + WSL 跳过）、Codex 写入器（文本段手术保留注释/无关表、清理遗留 [mcp.servers]、手写 TOML 转义）、Service（位图 diff 同步/删除传播/导入翻位不覆盖 spec/ImportBundle）。api/mcp_handlers + /v0/mcp/* 路由（admin key）+ main 装配 + proxy-hub mcp sync CLI。前端 MCPPage（server 列表/开关/同步/目标登记/导入）+ App 标签 + api.ts。规范 mcp-sharing.md。验证 gofmt/vet/build/go test ./...（mcp 保留性往返 + fileio 全过）+ 前端 tsc/vite build 全绿；e2e：建→启用→登记目标→sync 证 projects 字节保留 + mcpServers 写入 + cmd/c + 401 + CLI。后台 agent fork 写 mcp 核心+前端，主会话写 fileio/迁移/handlers/路由/装配/CLI，整合后单次提交 b4e14bc。MVP 4/5，待 M5。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4e14bc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
