@@ -23,7 +23,9 @@ import (
 	"github.com/huangjunjan/proxy-hub/internal/credstore"
 	"github.com/huangjunjan/proxy-hub/internal/relay"
 	"github.com/huangjunjan/proxy-hub/internal/selector"
+	"github.com/huangjunjan/proxy-hub/internal/stats"
 	"github.com/huangjunjan/proxy-hub/internal/store"
+	"github.com/huangjunjan/proxy-hub/internal/usage"
 )
 
 // shutdownTimeout 是优雅停机时等待在途请求完成的上限。
@@ -110,8 +112,39 @@ func run() error {
 	healthMirror := relay.NewHealthMirror(healthStore.Persist)
 	healthMirror.Load(healthStates)
 
-	emitter := relay.NewEmitter(cfg.Relay.UsageBuffer)
-	usageDone := relay.DrainAndDiscard(emitter) // M2 占位消费者；M3 采集器替换
+	// 3c. M3 装配：统计 DAO + 定价表（内置种子 + DB）+ 用量发射器（可选同步兜底）+ 采集器。
+	statsDAO := stats.NewDAO(st)
+	if entries, serr := stats.SeedEntries(); serr != nil {
+		slog.Warn("加载内置定价种子失败，跳过种入", "error", serr)
+	} else if err := statsDAO.SeedPricing(startupCtx, entries, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		slog.Warn("种入定价失败，继续（管理端可手工配置）", "error", err)
+	}
+	pricingTable := stats.NewTable()
+	priceRows, err := statsDAO.PriceRows(startupCtx)
+	if err != nil {
+		return fmt.Errorf("装配定价表失败: %w", err)
+	}
+	pricingTable.Load(priceRows)
+
+	// 用量发射器：sync_fallback_on_full=true 时通道满改同步插入兜底（绝不丢计费，代价是热路径偶发阻塞）。
+	var onFull func(usage.Event)
+	if cfg.Stats.SyncFallbackOnFull {
+		onFull = func(ev usage.Event) {
+			if err := statsDAO.InsertLogsBatch(context.Background(), []usage.Event{ev}); err != nil {
+				slog.Error("用量同步兜底插入失败", "error", err)
+			}
+		}
+	}
+	emitter := usage.NewEmitter(cfg.Relay.UsageBuffer, onFull)
+
+	collector := stats.NewCollector(stats.CollectorConfig{
+		DAO:           statsDAO,
+		Emitter:       emitter,
+		BatchSize:     cfg.Stats.BatchSize,
+		BatchInterval: cfg.Stats.BatchInterval(),
+		FlushInterval: cfg.Stats.FlushInterval(),
+	})
+	usageDone := collector.Run(context.Background()) // 停机经 emitter.Close() 排空触发最终 flush
 
 	engine := relay.NewEngine(relay.Config{
 		Index:              routeIndex,
@@ -123,10 +156,38 @@ func run() error {
 		EnableCrossDialect: cfg.Relay.EnableCrossDialect,
 	})
 
+	// 保留期清理：启动跑一次 + 每日。stopCleanup 在停机时关闭以结束 goroutine。
+	stopCleanup := make(chan struct{})
+	runCleanup := func() {
+		if cfg.RetentionDays <= 0 {
+			return
+		}
+		cutoff := time.Now().AddDate(0, 0, -cfg.RetentionDays).UTC().Format(time.RFC3339)
+		if n, err := statsDAO.CleanupRawLogs(context.Background(), cutoff); err != nil {
+			slog.Warn("清理过期请求日志失败", "error", err)
+		} else if n > 0 {
+			slog.Info("已清理过期请求日志", "deleted", n, "before", cutoff)
+		}
+	}
+	runCleanup()
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopCleanup:
+				return
+			case <-ticker.C:
+				runCleanup()
+			}
+		}
+	}()
+
 	deps := api.Deps{
 		Relay:    api.NewRelayHandler(engine, routeIndex),
 		Admin:    api.NewAdminHandler(manager),
 		APIKey:   api.NewAPIKeyHandler(manager, keyCache),
+		Stats:    api.NewStatsHandler(statsDAO, pricingTable, emitter, dao),
 		KeyCache: keyCache,
 	}
 
@@ -180,7 +241,8 @@ func run() error {
 		slog.Error("HTTP 服务停机超时/出错", "error", err)
 		return err
 	}
-	// 服务已停（无新请求），关闭用量发射器并等待占位消费者排空。
+	// 服务已停（无新请求）：停清理循环，关闭用量发射器并等待采集器做最终 flush。
+	close(stopCleanup)
 	emitter.Close()
 	<-usageDone
 	if dropped := emitter.Dropped(); dropped > 0 {

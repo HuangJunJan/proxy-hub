@@ -47,6 +47,28 @@ type RelayConfig struct {
 	UsageBuffer int `yaml:"usage_buffer"`
 }
 
+// StatsConfig 是统计采集器相关配置。
+type StatsConfig struct {
+	// BatchSize 是事实行批量插入阈值（默认 100）。
+	BatchSize int `yaml:"batch_size"`
+	// BatchIntervalMs 是批量插入的最大等待毫秒（默认 200）。
+	BatchIntervalMs int `yaml:"batch_interval_ms"`
+	// FlushIntervalS 是滚动汇总 UPSERT flush 周期秒（默认 60）。
+	FlushIntervalS int `yaml:"flush_interval_s"`
+	// SyncFallbackOnFull 为 true 时用量通道满改同步插入兜底（绝不丢计费，代价是热路径偶发阻塞）；默认 false（计数丢弃）。
+	SyncFallbackOnFull bool `yaml:"sync_fallback_on_full"`
+}
+
+// BatchInterval 返回批量插入最大等待时长。
+func (s StatsConfig) BatchInterval() time.Duration {
+	return time.Duration(s.BatchIntervalMs) * time.Millisecond
+}
+
+// FlushInterval 返回滚动汇总 flush 周期。
+func (s StatsConfig) FlushInterval() time.Duration {
+	return time.Duration(s.FlushIntervalS) * time.Second
+}
+
 // Config 是 proxy-hub 的完整配置模型。
 type Config struct {
 	Server ServerConfig `yaml:"server"`
@@ -56,6 +78,7 @@ type Config struct {
 	AdminKey string      `yaml:"admin_key"`
 	Log      LogConfig   `yaml:"log"`
 	Relay    RelayConfig `yaml:"relay"`
+	Stats    StatsConfig `yaml:"stats"`
 	// RetentionDays 是原始请求日志保留天数（汇总不受影响）。
 	RetentionDays int `yaml:"retention_days"`
 
@@ -82,6 +105,12 @@ func Default() *Config {
 			MaxRetries:         2,
 			EnableCrossDialect: false,
 			UsageBuffer:        16384,
+		},
+		Stats: StatsConfig{
+			BatchSize:          100,
+			BatchIntervalMs:    200,
+			FlushIntervalS:     60,
+			SyncFallbackOnFull: false,
 		},
 		RetentionDays: 30,
 	}
@@ -171,6 +200,26 @@ func applyEnv(cfg *Config) {
 			cfg.Relay.UsageBuffer = n
 		}
 	}
+	if v, ok := lookupEnv("STATS_BATCH_SIZE"); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Stats.BatchSize = n
+		}
+	}
+	if v, ok := lookupEnv("STATS_BATCH_INTERVAL_MS"); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Stats.BatchIntervalMs = n
+		}
+	}
+	if v, ok := lookupEnv("STATS_FLUSH_INTERVAL_S"); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Stats.FlushIntervalS = n
+		}
+	}
+	if v, ok := lookupEnv("STATS_SYNC_FALLBACK_ON_FULL"); ok {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.Stats.SyncFallbackOnFull = b
+		}
+	}
 }
 
 // lookupEnv 读取带前缀的环境变量；返回值与是否存在。
@@ -204,6 +253,15 @@ func (c *Config) validate() error {
 	}
 	if c.Relay.UsageBuffer < 0 {
 		return fmt.Errorf("relay.usage_buffer 不能为负: %d", c.Relay.UsageBuffer)
+	}
+	if c.Stats.BatchSize < 0 {
+		return fmt.Errorf("stats.batch_size 不能为负: %d", c.Stats.BatchSize)
+	}
+	if c.Stats.BatchIntervalMs < 0 {
+		return fmt.Errorf("stats.batch_interval_ms 不能为负: %d", c.Stats.BatchIntervalMs)
+	}
+	if c.Stats.FlushIntervalS < 0 {
+		return fmt.Errorf("stats.flush_interval_s 不能为负: %d", c.Stats.FlushIntervalS)
 	}
 	return nil
 }

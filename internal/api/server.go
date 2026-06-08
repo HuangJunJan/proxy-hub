@@ -25,6 +25,7 @@ type Deps struct {
 	Relay    *RelayHandler
 	Admin    *AdminHandler
 	APIKey   *APIKeyHandler
+	Stats    *StatsHandler
 	KeyCache *apikey.Cache
 }
 
@@ -70,6 +71,16 @@ func NewServer(cfg *config.Config, st *store.Store, deps Deps) (*gin.Engine, err
 		admin.POST("/api-keys", deps.APIKey.Create)
 		admin.PUT("/api-keys/:id", deps.APIKey.SetEnabled)
 		admin.DELETE("/api-keys/:id", deps.APIKey.Delete)
+	}
+	if deps.Stats != nil {
+		admin.GET("/stats/overview", deps.Stats.Overview)
+		admin.GET("/stats/timeseries", deps.Stats.Timeseries)
+		admin.GET("/stats/breakdown", deps.Stats.Breakdown)
+		admin.GET("/stats/logs", deps.Stats.Logs)
+		admin.GET("/stats/health", deps.Stats.Health)
+		admin.GET("/pricing", deps.Stats.ListPricing)
+		admin.PUT("/pricing/:model", deps.Stats.UpsertPricing)
+		admin.DELETE("/pricing/:model", deps.Stats.DeletePricing)
 	}
 
 	// 静态 SPA 壳 + history 模式回退。

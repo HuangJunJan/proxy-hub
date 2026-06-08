@@ -38,5 +38,16 @@ relay:
   # 用量事件通道容量。默认 16384；满时丢弃并计数（经仪表盘暴露，非静默）。
   usage_buffer: 16384
 
+# 统计采集相关配置。
+stats:
+  # 事实行批量插入阈值。默认 100。
+  batch_size: 100
+  # 批量插入的最大等待毫秒。默认 200。
+  batch_interval_ms: 200
+  # 滚动汇总 UPSERT flush 周期（秒）。默认 60。
+  flush_interval_s: 60
+  # 用量通道满时是否改同步插入兜底（true=绝不丢计费但热路径偶发阻塞；false=计数丢弃）。默认 false。
+  sync_fallback_on_full: false
+
 # 原始请求日志保留天数（汇总数据不受影响）。默认 30。
 retention_days: 30

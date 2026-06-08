@@ -11,6 +11,7 @@ import (
 	"github.com/huangjunjan/proxy-hub/internal/channel"
 	"github.com/huangjunjan/proxy-hub/internal/credstore"
 	"github.com/huangjunjan/proxy-hub/internal/selector"
+	"github.com/huangjunjan/proxy-hub/internal/usage"
 )
 
 // fakeAdaptor 是测试用适配器：把请求打到 rt.BaseURL，回写响应体并填固定 usage。
@@ -44,11 +45,11 @@ func (f fakeCreds) Get(id int64) (credstore.Cred, bool) {
 func init() { adaptor.Register(fakeAdaptor{}) }
 
 // newTestEngine 构造一个候选为指定渠道的引擎。
-func newTestEngine(t *testing.T, chans []channel.ChannelAbilities, creds fakeCreds) (*Engine, *Emitter) {
+func newTestEngine(t *testing.T, chans []channel.ChannelAbilities, creds fakeCreds) (*Engine, *usage.Emitter) {
 	t.Helper()
 	idx := channel.NewRouteIndex()
 	idx.Rebuild(chans)
-	em := NewEmitter(16)
+	em := usage.NewEmitter(16, nil)
 	eng := NewEngine(Config{
 		Index:      idx,
 		Selector:   selector.New(),

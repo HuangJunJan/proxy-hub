@@ -17,6 +17,7 @@ import (
 	"github.com/huangjunjan/proxy-hub/internal/channel"
 	"github.com/huangjunjan/proxy-hub/internal/credstore"
 	"github.com/huangjunjan/proxy-hub/internal/selector"
+	"github.com/huangjunjan/proxy-hub/internal/usage"
 )
 
 // Engine 编排一次中转。所有协作者经构造注入，使引擎本身 dbgen 无关、可单测：
@@ -25,7 +26,7 @@ type Engine struct {
 	index    *channel.RouteIndex
 	selector *selector.Selector
 	health   *HealthMirror
-	emitter  *Emitter
+	emitter  *usage.Emitter
 	creds    credGetter
 
 	maxRetries   int
@@ -48,7 +49,7 @@ type Config struct {
 	Index              *channel.RouteIndex
 	Selector           *selector.Selector
 	Health             *HealthMirror
-	Emitter            *Emitter
+	Emitter            *usage.Emitter
 	Creds              credGetter
 	MaxRetries         int  // <=0 时取默认 2
 	EnableCrossDialect bool // 跨方言转换特性开关（默认 false；见 design §10/§14）
@@ -78,7 +79,7 @@ func NewEngine(cfg Config) *Engine {
 // 回写客户端 → 发 UsageEvent + Mark 健康。函数返回时必定发出一条 UsageEvent（无密钥/请求体）。
 func (e *Engine) Serve(ctx context.Context, w http.ResponseWriter, in *adaptor.RelayInput) {
 	start := e.now()
-	ev := UsageEvent{
+	ev := usage.Event{
 		RequestID:      e.newID(),
 		RequestedModel: in.RequestedModel,
 		Group:          in.Group,
@@ -188,10 +189,10 @@ func (e *Engine) Serve(ctx context.Context, w http.ResponseWriter, in *adaptor.R
 		ev.UpstreamModel = pick.UpstreamModel
 		ev.StatusCode = resp.StatusCode
 
-		var usage adaptor.UsageResult
-		herr := ad.HandleResponse(ctx, resp, w, &usage)
+		var ur adaptor.UsageResult
+		herr := ad.HandleResponse(ctx, resp, w, &ur)
 		_ = resp.Body.Close()
-		fillUsage(&ev, usage)
+		fillUsage(&ev, ur)
 
 		if oc == OutcomeSuccess {
 			e.selector.RecordAffinity(in.SessionID, pick.ChannelID)
@@ -285,7 +286,7 @@ func writeError(w http.ResponseWriter, format adaptor.EndpointFormat, status int
 }
 
 // fillUsage 把适配器解析出的用量拷入事件。
-func fillUsage(ev *UsageEvent, u adaptor.UsageResult) {
+func fillUsage(ev *usage.Event, u adaptor.UsageResult) {
 	ev.InputTokens = u.InputTokens
 	ev.OutputTokens = u.OutputTokens
 	ev.ReasoningTokens = u.ReasoningTokens

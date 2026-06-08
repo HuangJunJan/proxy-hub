@@ -64,3 +64,76 @@ type Meta struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
+
+type ModelPricing struct {
+	ModelID                 string `json:"model_id"`
+	InputPerMillion         string `json:"input_per_million"`
+	OutputPerMillion        string `json:"output_per_million"`
+	CacheReadPerMillion     string `json:"cache_read_per_million"`
+	CacheCreationPerMillion string `json:"cache_creation_per_million"`
+	Source                  string `json:"source"`
+	UpdatedAt               string `json:"updated_at"`
+}
+
+type RequestLog struct {
+	ID                  int64         `json:"id"`
+	RequestID           string        `json:"request_id"`
+	CreatedAt           string        `json:"created_at"`
+	ApiKeyID            int64         `json:"api_key_id"`
+	ChannelID           int64         `json:"channel_id"`
+	UserID              int64         `json:"user_id"`
+	GroupName           string        `json:"group_name"`
+	RequestedModel      string        `json:"requested_model"`
+	UpstreamModel       string        `json:"upstream_model"`
+	EndpointFormat      string        `json:"endpoint_format"`
+	IsStream            int64         `json:"is_stream"`
+	InputTokens         int64         `json:"input_tokens"`
+	OutputTokens        int64         `json:"output_tokens"`
+	ReasoningTokens     int64         `json:"reasoning_tokens"`
+	CacheReadTokens     int64         `json:"cache_read_tokens"`
+	CacheCreationTokens int64         `json:"cache_creation_tokens"`
+	TotalTokens         int64         `json:"total_tokens"`
+	LatencyMs           int64         `json:"latency_ms"`
+	FirstTokenMs        sql.NullInt64 `json:"first_token_ms"`
+	StatusCode          int64         `json:"status_code"`
+	IsError             int64         `json:"is_error"`
+	ErrorType           string        `json:"error_type"`
+	ErrorMessage        string        `json:"error_message"`
+	SessionID           string        `json:"session_id"`
+	UsageSource         string        `json:"usage_source"`
+}
+
+type UsageDailyRollup struct {
+	BucketDate          string `json:"bucket_date"`
+	ChannelID           int64  `json:"channel_id"`
+	RequestedModel      string `json:"requested_model"`
+	RequestCount        int64  `json:"request_count"`
+	SuccessCount        int64  `json:"success_count"`
+	ErrorCount          int64  `json:"error_count"`
+	InputTokens         int64  `json:"input_tokens"`
+	OutputTokens        int64  `json:"output_tokens"`
+	CacheReadTokens     int64  `json:"cache_read_tokens"`
+	CacheCreationTokens int64  `json:"cache_creation_tokens"`
+	ReasoningTokens     int64  `json:"reasoning_tokens"`
+	SumLatencyMs        int64  `json:"sum_latency_ms"`
+	SumFirstTokenMs     int64  `json:"sum_first_token_ms"`
+	CountFirstToken     int64  `json:"count_first_token"`
+}
+
+type UsageHourlyRollup struct {
+	BucketHour          string `json:"bucket_hour"`
+	ChannelID           int64  `json:"channel_id"`
+	ApiKeyID            int64  `json:"api_key_id"`
+	RequestedModel      string `json:"requested_model"`
+	RequestCount        int64  `json:"request_count"`
+	SuccessCount        int64  `json:"success_count"`
+	ErrorCount          int64  `json:"error_count"`
+	InputTokens         int64  `json:"input_tokens"`
+	OutputTokens        int64  `json:"output_tokens"`
+	CacheReadTokens     int64  `json:"cache_read_tokens"`
+	CacheCreationTokens int64  `json:"cache_creation_tokens"`
+	ReasoningTokens     int64  `json:"reasoning_tokens"`
+	SumLatencyMs        int64  `json:"sum_latency_ms"`
+	SumFirstTokenMs     int64  `json:"sum_first_token_ms"`
+	CountFirstToken     int64  `json:"count_first_token"`
+}
