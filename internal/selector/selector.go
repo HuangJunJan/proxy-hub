@@ -25,8 +25,15 @@ type affEntry struct {
 	expireAt  time.Time
 }
 
+// 选择策略。
+const (
+	StrategyRoundRobin = "round_robin" // 档内加权随机（默认）
+	StrategyFillFirst  = "fill_first"  // 档内填满首选（weight desc, id asc）
+)
+
 // Selector 持有会话亲和缓存与可注入的时钟/随机源（便于确定性测试）。
 type Selector struct {
+	strategy  string
 	mu        sync.Mutex
 	affinity  map[string]affEntry
 	ttl       time.Duration
@@ -34,9 +41,16 @@ type Selector struct {
 	randFloat func() float64 // 返回 [0,1)
 }
 
-// New 创建选择器（默认时钟 time.Now、默认随机源 math/rand/v2）。
-func New() *Selector {
+// New 创建默认（round_robin）选择器。
+func New() *Selector { return NewWithStrategy(StrategyRoundRobin) }
+
+// NewWithStrategy 按策略创建选择器（未知策略回退 round_robin）。
+func NewWithStrategy(strategy string) *Selector {
+	if strategy != StrategyFillFirst {
+		strategy = StrategyRoundRobin
+	}
 	return &Selector{
+		strategy:  strategy,
 		affinity:  map[string]affEntry{},
 		ttl:       defaultAffinityTTL,
 		now:       time.Now,
@@ -82,8 +96,23 @@ func (s *Selector) Pick(candidates []*channel.ChannelRuntime, sessionID string, 
 		}
 	}
 
-	// 4. 档内加权随机。
+	// 4. 档内择一：fill_first 取首选（填满优先渠道），否则加权随机。
+	if s.strategy == StrategyFillFirst {
+		return fillFirstPick(tier), nil
+	}
 	return s.weightedPick(tier), nil
+}
+
+// fillFirstPick 在同优先级档内取「首选」：weight 最大，平手取 channelID 最小。
+// 配合冷却过滤即「填满首选渠道，溢出/冷却才用下一个」。
+func fillFirstPick(cands []*channel.ChannelRuntime) *channel.ChannelRuntime {
+	best := cands[0]
+	for _, c := range cands[1:] {
+		if c.Weight > best.Weight || (c.Weight == best.Weight && c.ChannelID < best.ChannelID) {
+			best = c
+		}
+	}
+	return best
 }
 
 // weightedPick 在同优先级档内按 weight 加权随机；weight<=0 视为 1。

@@ -59,6 +59,7 @@ func NewServer(cfg *config.Config, st *store.Store, deps Deps) (*gin.Engine, err
 	// 管理端点：admin key 鉴权（渠道 CRUD + 测试，入站 key CRUD）。
 	admin := r.Group("/admin")
 	admin.Use(middleware.Auth(cfg.AdminKey))
+	admin.Use(middleware.OriginCheck(cfg.Server.AllowedOrigins))
 	if deps.Admin != nil {
 		admin.GET("/channels", deps.Admin.List)
 		admin.POST("/channels", deps.Admin.Create)
@@ -79,6 +80,7 @@ func NewServer(cfg *config.Config, st *store.Store, deps Deps) (*gin.Engine, err
 		admin.GET("/stats/breakdown", deps.Stats.Breakdown)
 		admin.GET("/stats/logs", deps.Stats.Logs)
 		admin.GET("/stats/health", deps.Stats.Health)
+		admin.GET("/health/checks", deps.Stats.HealthChecks)
 		admin.GET("/pricing", deps.Stats.ListPricing)
 		admin.PUT("/pricing/:model", deps.Stats.UpsertPricing)
 		admin.DELETE("/pricing/:model", deps.Stats.DeletePricing)
@@ -88,6 +90,7 @@ func NewServer(cfg *config.Config, st *store.Store, deps Deps) (*gin.Engine, err
 	if deps.MCP != nil {
 		m := r.Group("/v0/mcp")
 		m.Use(middleware.Auth(cfg.AdminKey))
+		m.Use(middleware.OriginCheck(cfg.Server.AllowedOrigins))
 		m.GET("/servers", deps.MCP.ListServers)
 		m.POST("/servers", deps.MCP.CreateServer)
 		m.GET("/servers/:id", deps.MCP.GetServer)

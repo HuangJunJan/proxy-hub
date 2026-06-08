@@ -27,6 +27,8 @@ type ServerConfig struct {
 	WriteTimeout time.Duration `yaml:"write_timeout"`
 	// BodyLimit 是请求体大小上限（字节）。0 表示使用默认值 32MB。
 	BodyLimit int64 `yaml:"body_limit"`
+	// AllowedOrigins 是改文件/状态端点（/admin、/v0/mcp 的非 GET）额外放行的 Origin（默认空=仅同源 Host）。
+	AllowedOrigins []string `yaml:"allowed_origins"`
 }
 
 // LogConfig 是日志相关配置。
@@ -69,16 +71,34 @@ func (s StatsConfig) FlushInterval() time.Duration {
 	return time.Duration(s.FlushIntervalS) * time.Second
 }
 
+// SelectorConfig 是渠道选择策略配置。
+type SelectorConfig struct {
+	// Strategy 取值 round_robin（默认，档内加权随机）| fill_first（档内填满首选）。
+	Strategy string `yaml:"strategy"`
+}
+
+// HealthConfig 是主动健康探测配置（默认关）。
+type HealthConfig struct {
+	// Enabled 是主动探测总开关（默认 false）。
+	Enabled bool `yaml:"enabled"`
+	// Interval 是探测周期（默认 5m）。
+	Interval time.Duration `yaml:"interval"`
+	// Timeout 是单次探针超时（默认 20s）。
+	Timeout time.Duration `yaml:"timeout"`
+}
+
 // Config 是 proxy-hub 的完整配置模型。
 type Config struct {
 	Server ServerConfig `yaml:"server"`
 	// DataDir 是数据目录；派生出 db_path、auths_dir 等子路径。
 	DataDir string `yaml:"data_dir"`
 	// AdminKey 是管理端鉴权密钥。为空则首次运行自动生成并打印一次。
-	AdminKey string      `yaml:"admin_key"`
-	Log      LogConfig   `yaml:"log"`
-	Relay    RelayConfig `yaml:"relay"`
-	Stats    StatsConfig `yaml:"stats"`
+	AdminKey string         `yaml:"admin_key"`
+	Log      LogConfig      `yaml:"log"`
+	Relay    RelayConfig    `yaml:"relay"`
+	Stats    StatsConfig    `yaml:"stats"`
+	Selector SelectorConfig `yaml:"selector"`
+	Health   HealthConfig   `yaml:"health"`
 	// RetentionDays 是原始请求日志保留天数（汇总不受影响）。
 	RetentionDays int `yaml:"retention_days"`
 
@@ -111,6 +131,12 @@ func Default() *Config {
 			BatchIntervalMs:    200,
 			FlushIntervalS:     60,
 			SyncFallbackOnFull: false,
+		},
+		Selector: SelectorConfig{Strategy: "round_robin"},
+		Health: HealthConfig{
+			Enabled:  false,
+			Interval: 5 * time.Minute,
+			Timeout:  20 * time.Second,
 		},
 		RetentionDays: 30,
 	}
@@ -220,6 +246,42 @@ func applyEnv(cfg *Config) {
 			cfg.Stats.SyncFallbackOnFull = b
 		}
 	}
+	if v, ok := lookupEnv("SELECTOR_STRATEGY"); ok {
+		cfg.Selector.Strategy = v
+	}
+	if v, ok := lookupEnv("HEALTH_ENABLED"); ok {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.Health.Enabled = b
+		}
+	}
+	if v, ok := lookupEnv("HEALTH_INTERVAL"); ok {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Health.Interval = d
+		}
+	}
+	if v, ok := lookupEnv("HEALTH_TIMEOUT"); ok {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Health.Timeout = d
+		}
+	}
+	if v, ok := lookupEnv("SERVER_ALLOWED_ORIGINS"); ok {
+		cfg.Server.AllowedOrigins = splitCSV(v)
+	}
+}
+
+// splitCSV 按逗号切分并去空白（空串返回 nil）。
+func splitCSV(v string) []string {
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // lookupEnv 读取带前缀的环境变量；返回值与是否存在。
@@ -262,6 +324,17 @@ func (c *Config) validate() error {
 	}
 	if c.Stats.FlushIntervalS < 0 {
 		return fmt.Errorf("stats.flush_interval_s 不能为负: %d", c.Stats.FlushIntervalS)
+	}
+	switch c.Selector.Strategy {
+	case "round_robin", "fill_first":
+	default:
+		return fmt.Errorf("selector.strategy 非法: %q（应为 round_robin|fill_first）", c.Selector.Strategy)
+	}
+	if c.Health.Interval < 0 {
+		return fmt.Errorf("health.interval 不能为负: %s", c.Health.Interval)
+	}
+	if c.Health.Timeout < 0 {
+		return fmt.Errorf("health.timeout 不能为负: %s", c.Health.Timeout)
 	}
 	return nil
 }

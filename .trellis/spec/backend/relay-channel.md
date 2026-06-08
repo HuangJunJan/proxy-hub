@@ -75,6 +75,14 @@ type Adaptor interface {
 
 `Pick(candidates, sessionID, isBlocked)`：①冷却过滤 → ②会话亲和（上次成功渠道仍在可用集则复用）→ ③最高优先级档 → ④档内**加权随机**（weight<=0 视为 1）。`RecordAffinity` **仅成功后**由 relay 调用（失败渠道不粘附）；亲和 TTL 默认 10min，仅内存、关机丢弃。sessionID 取自 `X-Session-Id` 头。
 
+### 策略开关（M5）
+
+`selector.NewWithStrategy(cfg.Selector.Strategy)`：`round_robin`（默认，第④步加权随机）| `fill_first`（第④步取**首选**：weight 最大、平手 channelID 最小 ⇒ 填满首选渠道，冷却/溢出才用下一个）。①②③ 不变。未知策略回退 round_robin。
+
+## 主动健康探测（M5，可选默认关）—— internal/health
+
+`health.Prober`（`health.enabled=true` 才由 main 起独立 goroutine）：按 `health.interval` 对**启用渠道 × 其模型**发 max_tokens=1 最小探针（复用 adaptor.BuildRequest，独立 http client，绝不阻塞中转），写 `health_check_logs`（迁移 0005）+ 调 `HealthMirror.Mark`（与被动路径同源的成功重置/失败冷却）。`doProbe` 可注入（测试）。仪表盘 `GET /admin/health/checks?limit=` 读最近记录。停机随 ctx 取消。
+
 ## relay 重试循环
 
 `attempt <= maxRetries`（默认 2）；每轮 `pickExcluding`（跳过已 tried + IsBlocked）；可重试失败 → `Mark` 冷却 + 丢弃响应体 + 换渠道；终态（成功/不可重试/重试用尽）回写客户端 + 成功时 `RecordAffinity`。**函数返回必发且仅发一条 `UsageEvent`**（defer）。错误体按入站方言成形：OpenAI `{error:{message,type,code}}` vs Claude `{type:"error",error:{type,message}}`。

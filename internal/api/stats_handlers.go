@@ -16,9 +16,10 @@ import (
 	"github.com/huangjunjan/proxy-hub/internal/usage"
 )
 
-// healthLister 抽象渠道健康读取（channel.DAO 满足），供 /admin/stats/health 用。
+// healthLister 抽象渠道健康读取（channel.DAO 满足），供 /admin/stats/health 与 /admin/health/checks 用。
 type healthLister interface {
 	ListHealth(ctx context.Context) ([]channel.HealthSnapshot, error)
+	ListRecentHealthChecks(ctx context.Context, limit int) ([]channel.HealthCheck, error)
 }
 
 // StatsHandler 提供仪表盘读取端点（/admin/stats/*）与定价 CRUD（/admin/pricing），守护于 admin key。
@@ -278,6 +279,25 @@ func (h *StatsHandler) Health(c *gin.Context) {
 		out = append(out, healthDTO{
 			ChannelID: s.ChannelID, Model: s.Model, IsHealthy: s.IsHealthy, ConsecutiveFailures: s.ConsecutiveFailures,
 			LastError: s.LastError, CooldownUntil: rfc3339OrEmpty(s.CooldownUntil), UpdatedAt: rfc3339OrEmpty(s.UpdatedAt),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": out})
+}
+
+// HealthChecks 处理 GET /admin/health/checks：最近若干条主动探测记录（health.enabled 开启时由探测器写入）。
+func (h *StatsHandler) HealthChecks(c *gin.Context) {
+	limit := atoiDefault(c.Query("limit"), 100)
+	checks, err := h.health.ListRecentHealthChecks(c.Request.Context(), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	out := make([]gin.H, 0, len(checks))
+	for _, ck := range checks {
+		out = append(out, gin.H{
+			"channel_id": ck.ChannelID, "model": ck.Model, "success": ck.Success,
+			"http_status": ck.HTTPStatus, "response_time_ms": ck.ResponseTimeMS,
+			"message": ck.Message, "checked_at": ck.CheckedAt,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"data": out})

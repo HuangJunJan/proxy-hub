@@ -60,6 +60,17 @@ type ChannelModelHealth struct {
 	UpdatedAt           string         `json:"updated_at"`
 }
 
+type HealthCheckLog struct {
+	ID             int64  `json:"id"`
+	ChannelID      int64  `json:"channel_id"`
+	Model          string `json:"model"`
+	Success        int64  `json:"success"`
+	HttpStatus     int64  `json:"http_status"`
+	ResponseTimeMs int64  `json:"response_time_ms"`
+	Message        string `json:"message"`
+	CheckedAt      string `json:"checked_at"`
+}
+
 type McpServer struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`

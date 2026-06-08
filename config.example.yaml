@@ -15,6 +15,9 @@ server:
   write_timeout: 60s
   # 请求体大小上限（字节）。默认 33554432（32MB）。
   body_limit: 33554432
+  # 改文件/状态端点（/admin、/v0/mcp 的非 GET）额外放行的 Origin（默认空=仅同源 Host）。
+  # 浏览器跨域写请求会被拒（防 CSRF）；非浏览器客户端（无 Origin）由 bearer 鉴权保护。
+  allowed_origins: []
 
 # 数据目录。派生：数据库 = data_dir/proxy-hub.db，凭证目录 = data_dir/auths。
 data_dir: "./data"
@@ -48,6 +51,18 @@ stats:
   flush_interval_s: 60
   # 用量通道满时是否改同步插入兜底（true=绝不丢计费但热路径偶发阻塞；false=计数丢弃）。默认 false。
   sync_fallback_on_full: false
+
+# 渠道选择策略。
+selector:
+  # round_robin（默认，最高优先级档内加权随机）| fill_first（填满首选渠道，溢出/冷却才用下一个）。
+  strategy: round_robin
+
+# 主动健康探测（可选，默认关）。开启后按周期对启用渠道×模型发最小探针，记 health_check_logs +
+# 更新渠道健康（与中转路径同源的冷却）；独立 goroutine，绝不阻塞中转。
+health:
+  enabled: false
+  interval: 5m
+  timeout: 20s
 
 # 原始请求日志保留天数（汇总数据不受影响）。默认 30。
 retention_days: 30

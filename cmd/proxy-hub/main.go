@@ -21,6 +21,7 @@ import (
 	"github.com/huangjunjan/proxy-hub/internal/channel"
 	"github.com/huangjunjan/proxy-hub/internal/config"
 	"github.com/huangjunjan/proxy-hub/internal/credstore"
+	"github.com/huangjunjan/proxy-hub/internal/health"
 	"github.com/huangjunjan/proxy-hub/internal/mcp"
 	"github.com/huangjunjan/proxy-hub/internal/relay"
 	"github.com/huangjunjan/proxy-hub/internal/selector"
@@ -149,13 +150,28 @@ func run() error {
 
 	engine := relay.NewEngine(relay.Config{
 		Index:              routeIndex,
-		Selector:           selector.New(),
+		Selector:           selector.NewWithStrategy(cfg.Selector.Strategy),
 		Health:             healthMirror,
 		Emitter:            emitter,
 		Creds:              creds,
 		MaxRetries:         cfg.Relay.MaxRetries,
 		EnableCrossDialect: cfg.Relay.EnableCrossDialect,
 	})
+
+	// 主动健康探测（可选，默认关）：独立 goroutine，停机随 ctx 取消。
+	var proberCancel context.CancelFunc
+	var proberDone <-chan struct{}
+	if cfg.Health.Enabled {
+		var pctx context.Context
+		pctx, proberCancel = context.WithCancel(context.Background())
+		defer proberCancel() // 兜底：异常返回路径也取消，防 context 泄漏（正常停机已显式取消并等待）
+		prober := health.NewProber(health.Config{
+			DAO: dao, Creds: creds, Mark: healthMirror.Mark,
+			Interval: cfg.Health.Interval, Timeout: cfg.Health.Timeout,
+		})
+		proberDone = prober.Run(pctx)
+		slog.Info("主动健康探测已启用", "interval", cfg.Health.Interval.String())
+	}
 
 	// 保留期清理：启动跑一次 + 每日。stopCleanup 在停机时关闭以结束 goroutine。
 	stopCleanup := make(chan struct{})
@@ -247,6 +263,10 @@ func run() error {
 	}
 	// 服务已停（无新请求）：停清理循环，关闭用量发射器并等待采集器做最终 flush。
 	close(stopCleanup)
+	if proberCancel != nil {
+		proberCancel()
+		<-proberDone
+	}
 	emitter.Close()
 	<-usageDone
 	if dropped := emitter.Dropped(); dropped > 0 {
